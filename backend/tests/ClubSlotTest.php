@@ -108,6 +108,20 @@ class ClubSlotTest extends WebTestCase
         $this->assertStringContainsString('Lundi, mercredi 20:00–22:00', $body['message']);
     }
 
+    public function testSessionTimesWithOffsetAreStoredExactly(): void
+    {
+        $this->call('POST', '/api/slots', ['weekdays' => [5], 'startTime' => '19:00', 'endTime' => '20:30'], $this->ref);
+        // Le formulaire envoie l'heure du créneau avec son décalage (vendredi 13/11/2026, Paris)
+        [$code, $s] = $this->call('POST', '/api/sessions', ['sectionId' => $this->section, 'title' => 'S', 'start' => '2026-11-13T19:00:00+01:00',
+            'end' => '2026-11-13T20:30:00+01:00', 'laneIds' => [$this->poolA['lanes'][0]['id']]], $this->inst);
+        $this->assertSame(201, $code);
+        [, $s] = $this->call('GET', "/api/sessions/{$s['id']}", null, $this->inst);
+        $this->assertSame(strtotime('2026-11-13T19:00:00+01:00'), strtotime($s['start']), 'pas de décalage d\'une heure');
+        $this->assertSame(strtotime('2026-11-13T20:30:00+01:00'), strtotime($s['end']));
+        [, $occ] = $this->call('GET', '/api/occupancy?from=2026-11-13T00:00:00%2B01:00&to=2026-11-14T00:00:00%2B01:00', null, $this->inst);
+        $this->assertCount(1, $occ['occurrences'][0]['lanes'][0]['reservations'], 'la séance apparaît bien dans son créneau');
+    }
+
     public function testSlotRestrictedToAPoolAndValidityPeriod(): void
     {
         $this->call('POST', '/api/slots', ['weekdays' => [1], 'startTime' => '20:00', 'endTime' => '22:00', 'poolId' => $this->poolB['id'], 'validUntil' => '2026-12-31'], $this->ref);

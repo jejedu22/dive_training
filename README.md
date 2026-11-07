@@ -24,6 +24,7 @@ docker compose exec backend php bin/console app:user:password jean@club.fr 'nouv
 Menu **Créneaux** (référents) : les plages où le club dispose de la piscine, ex. **lundi et mercredi 20:00–22:00**, avec une période de validité facultative (la saison).
 - **Lignes ouvertes** : pour chaque créneau, toutes les lignes ou une sélection (ex. fosse lignes 1 à 4 + grand bassin lignes 1 à 3).
 - **Plan d'occupation** : pour chaque ligne ouverte, la section qui l'occupe (ex. Ligne 1 → Niveau 1), ou « libre ». Il s'applique à chaque occurrence du créneau.
+- **Création d'une séance** : on choisit la section, puis **un créneau du club parmi les prochains où elle a accès à une ligne** (pas d'horaires libres), puis les lignes ; les lignes attribuées à la section sont présélectionnées. Seul un référent peut créer une séance exceptionnelle hors créneau (et s'il n'existe aucun créneau, les horaires sont libres).
 - **Séances** : une ligne attribuée à la section est **confirmée directement** ; une ligne libre attend la **validation d'un référent** ; une ligne fermée ou attribuée à une autre section est refusée. Un référent peut passer outre.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
