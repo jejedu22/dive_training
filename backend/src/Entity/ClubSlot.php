@@ -1,12 +1,15 @@
 <?php
 namespace App\Entity;
 
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Créneau horaire récurrent attribué au club (ex. lundi et mercredi 20:00–22:00).
- * Heures exprimées dans le fuseau du club (APP_TIMEZONE). Bassin null = tous les bassins.
+ * Heures exprimées dans le fuseau du club (APP_TIMEZONE).
+ * Lignes disponibles : la liste $lanes si elle est renseignée, sinon toutes les lignes du bassin $pool, sinon toutes les lignes.
  */
 #[ORM\Entity]
 class ClubSlot
@@ -30,6 +33,19 @@ class ClubSlot
     private ?\DateTimeImmutable $validFrom = null;
     #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $validUntil = null;
+    /** @var Collection<int, Lane> */
+    #[ORM\ManyToMany(targetEntity: Lane::class)]
+    #[ORM\JoinTable(name: 'club_slot_lane')]
+    private Collection $lanes;
+    /** @var Collection<int, SlotAllocation> */
+    #[ORM\OneToMany(mappedBy: 'slot', targetEntity: SlotAllocation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $allocations;
+
+    public function __construct()
+    {
+        $this->lanes = new ArrayCollection();
+        $this->allocations = new ArrayCollection();
+    }
 
     public function getId(): ?int { return $this->id; }
     public function getLabel(): ?string { return $this->label; }
@@ -53,6 +69,25 @@ class ClubSlot
     public function setValidFrom(?\DateTimeImmutable $d): static { $this->validFrom = $d; return $this; }
     public function getValidUntil(): ?\DateTimeImmutable { return $this->validUntil; }
     public function setValidUntil(?\DateTimeImmutable $d): static { $this->validUntil = $d; return $this; }
+
+    /** @return Collection<int, Lane> */
+    public function getLanes(): Collection { return $this->lanes; }
+    /** @param Lane[] $lanes */
+    public function setLanes(array $lanes): static
+    {
+        $this->lanes->clear();
+        foreach ($lanes as $l) $this->lanes->add($l);
+        return $this;
+    }
+    /** @return Collection<int, SlotAllocation> */
+    public function getAllocations(): Collection { return $this->allocations; }
+    public function addAllocation(SlotAllocation $a): static { $this->allocations->add($a); $a->setSlot($this); return $this; }
+    public function removeAllocation(SlotAllocation $a): static { $this->allocations->removeElement($a); return $this; }
+    public function allocationFor(Lane $lane): ?SlotAllocation
+    {
+        foreach ($this->allocations as $a) if ($a->getLane()->getId() === $lane->getId()) return $a;
+        return null;
+    }
 
     /** Libellé lisible : « Lundi, mercredi 20:00–22:00 ». */
     public function describe(): string

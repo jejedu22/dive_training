@@ -121,7 +121,9 @@ class ClubSlotTest extends WebTestCase
         $this->call('POST', '/api/slots', ['label' => 'Club', 'weekdays' => [1], 'startTime' => '20:00', 'endTime' => '22:00'], $this->ref);
         [$code, $cal] = $this->call('GET', '/api/calendar?from=2026-12-07T00:00:00%2B01:00&to=2026-12-08T00:00:00%2B01:00', null, $this->inst);
         $this->assertSame(200, $code);
-        $this->assertSame([['slotId' => $cal['slots'][0]['slotId'], 'label' => 'Club', 'poolId' => null, 'pool' => null, 'start' => '2026-12-07T20:00:00+01:00', 'end' => '2026-12-07T22:00:00+01:00']], $cal['slots']);
+        $this->assertCount(1, $cal['slots']);
+        $this->assertSame(['Club', '2026-12-07T20:00:00+01:00', '2026-12-07T22:00:00+01:00'], [$cal['slots'][0]['label'], $cal['slots'][0]['start'], $cal['slots'][0]['end']]);
+        $this->assertCount(2, $cal['slots'][0]['laneIds'], 'toutes les lignes ouvertes par défaut');
         $this->assertArrayHasKey('poolId', $cal['resources'][0]);
     }
 }

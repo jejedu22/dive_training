@@ -1,15 +1,17 @@
 <?php
 namespace App\Service;
 
-use App\Entity\{ClubSlot, Pool};
+use App\Entity\{ClubSlot, Lane, Pool, Section, SlotAllocation};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 
-/** Calcule les occurrences concrètes des créneaux du club et vérifie qu'une séance s'y inscrit. */
+/** Créneaux du club : occurrences concrètes, lignes disponibles, plan d'occupation. */
 final class SlotService
 {
     private \DateTimeZone $tz;
+    /** @var array<int, Lane[]> */
+    private array $laneCache = [];
 
     public function __construct(private EntityManagerInterface $em, #[Autowire('%env(APP_TIMEZONE)%')] string $timezone)
     {
@@ -21,12 +23,42 @@ final class SlotService
     /** @return ClubSlot[] */
     public function all(): array
     {
-        return $this->em->getRepository(ClubSlot::class)->findBy([], ['id' => 'ASC']);
+        return $this->em->getRepository(ClubSlot::class)->findBy([], ['startTime' => 'ASC', 'id' => 'ASC']);
     }
 
     public function hasSlots(): bool
     {
         return $this->em->getRepository(ClubSlot::class)->count([]) > 0;
+    }
+
+    /** Toutes les lignes, triées par bassin puis par nom. @return Lane[] */
+    public function allLanes(): array
+    {
+        $lanes = $this->em->getRepository(Lane::class)->findAll();
+        usort($lanes, fn (Lane $a, Lane $b) => [$a->getPool()->getName(), $a->getName()] <=> [$b->getPool()->getName(), $b->getName()]);
+        return $lanes;
+    }
+
+    /** Lignes ouvertes au club sur ce créneau. @return Lane[] */
+    public function availableLanes(ClubSlot $slot): array
+    {
+        if ($slot->getId() !== null && isset($this->laneCache[$slot->getId()])) return $this->laneCache[$slot->getId()];
+        if (!$slot->getLanes()->isEmpty()) {
+            $ids = array_map(fn (Lane $l) => $l->getId(), $slot->getLanes()->toArray());
+            $lanes = array_values(array_filter($this->allLanes(), fn (Lane $l) => in_array($l->getId(), $ids, true)));
+        } elseif ($slot->getPool()) {
+            $lanes = array_values(array_filter($this->allLanes(), fn (Lane $l) => $l->getPool()->getId() === $slot->getPool()->getId()));
+        } else {
+            $lanes = $this->allLanes();
+        }
+        if ($slot->getId() !== null) $this->laneCache[$slot->getId()] = $lanes;
+        return $lanes;
+    }
+
+    public function isLaneAvailable(ClubSlot $slot, Lane $lane): bool
+    {
+        foreach ($this->availableLanes($slot) as $l) if ($l->getId() === $lane->getId()) return true;
+        return false;
     }
 
     /** Valide et applique les données reçues de l'API. */
@@ -48,6 +80,14 @@ final class SlotService
         if (array_key_exists('poolId', $d)) {
             $slot->setPool($d['poolId'] ? ($this->em->find(Pool::class, $d['poolId']) ?? throw new BadRequestHttpException('Bassin introuvable')) : null);
         }
+        if (array_key_exists('laneIds', $d)) {
+            if (!is_array($d['laneIds'])) throw new BadRequestHttpException('laneIds doit être une liste');
+            $lanes = [];
+            foreach (array_unique($d['laneIds']) as $id) {
+                $lanes[] = $this->em->find(Lane::class, $id) ?? throw new BadRequestHttpException("Ligne $id introuvable");
+            }
+            $slot->setLanes($lanes);
+        }
         foreach (['validFrom' => 'setValidFrom', 'validUntil' => 'setValidUntil'] as $k => $setter) {
             if (!array_key_exists($k, $d)) continue;
             $v = $d[$k] ?: null;
@@ -57,12 +97,44 @@ final class SlotService
         if ($slot->getValidFrom() && $slot->getValidUntil() && $slot->getValidUntil() < $slot->getValidFrom()) {
             throw new BadRequestHttpException('La date de fin de validité précède la date de début');
         }
+        // Une ligne qui n'est plus ouverte perd son attribution
+        if ($slot->getId() !== null) unset($this->laneCache[$slot->getId()]);
+        foreach ($slot->getAllocations()->toArray() as $a) {
+            if (!$this->isLaneAvailable($slot, $a->getLane())) $slot->removeAllocation($a);
+        }
         return $slot;
     }
 
     /**
+     * Remplace le plan d'occupation du créneau.
+     * @param list<array{laneId:int, sectionId:int|null}> $items
+     */
+    public function setAllocations(ClubSlot $slot, array $items): void
+    {
+        $wanted = [];
+        foreach ($items as $it) {
+            if (!is_array($it) || !isset($it['laneId'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionId":2}]');
+            if (empty($it['sectionId'])) continue;
+            $lane = $this->em->find(Lane::class, $it['laneId']) ?? throw new BadRequestHttpException("Ligne {$it['laneId']} introuvable");
+            if (!$this->isLaneAvailable($slot, $lane)) {
+                throw new BadRequestHttpException(sprintf('%s (%s) n\'est pas ouverte sur ce créneau', $lane->getName(), $lane->getPool()->getName()));
+            }
+            $wanted[$lane->getId()] = [$lane, $this->em->find(Section::class, $it['sectionId']) ?? throw new BadRequestHttpException('Section introuvable')];
+        }
+        foreach ($slot->getAllocations()->toArray() as $a) {
+            $laneId = $a->getLane()->getId();
+            if (!isset($wanted[$laneId])) { $slot->removeAllocation($a); continue; }
+            $a->setSection($wanted[$laneId][1]);
+            unset($wanted[$laneId]);
+        }
+        foreach ($wanted as [$lane, $section]) {
+            $slot->addAllocation((new SlotAllocation())->setLane($lane)->setSection($section));
+        }
+    }
+
+    /**
      * Occurrences des créneaux qui recoupent [from, to[.
-     * @return list<array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable}>
+     * @return list<array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[]}>
      */
     public function occurrences(\DateTimeImmutable $from, \DateTimeImmutable $to): array
     {
@@ -80,21 +152,22 @@ final class SlotService
                 if ($slot->getValidUntil() && $date > $slot->getValidUntil()->format('Y-m-d')) continue;
                 $start = new \DateTimeImmutable("$date {$slot->getStartTime()}", $this->tz);
                 $end = new \DateTimeImmutable("$date {$slot->getEndTime()}", $this->tz);
-                if ($start < $to && $end > $from) $out[] = ['slot' => $slot, 'start' => $start, 'end' => $end];
+                if ($start < $to && $end > $from) $out[] = ['slot' => $slot, 'start' => $start, 'end' => $end, 'lanes' => $this->availableLanes($slot)];
             }
         }
         usort($out, fn ($a, $b) => $a['start'] <=> $b['start']);
         return $out;
     }
 
-    /** La séance [start, end] tient-elle entièrement dans un créneau valable pour ce bassin ? */
-    public function fits(\DateTimeImmutable $start, \DateTimeImmutable $end, Pool $pool): bool
+    /**
+     * Occurrence de créneau qui contient entièrement [start, end] et où la ligne est ouverte.
+     * @return array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[]}|null
+     */
+    public function findOccurrence(\DateTimeImmutable $start, \DateTimeImmutable $end, Lane $lane): ?array
     {
         foreach ($this->occurrences($start->modify('-1 day'), $end->modify('+1 day')) as $o) {
-            $slotPool = $o['slot']->getPool();
-            if ($slotPool !== null && $slotPool->getId() !== $pool->getId()) continue;
-            if ($o['start'] <= $start && $end <= $o['end']) return true;
+            if ($o['start'] <= $start && $end <= $o['end'] && $this->isLaneAvailable($o['slot'], $lane)) return $o;
         }
-        return false;
+        return null;
     }
 }

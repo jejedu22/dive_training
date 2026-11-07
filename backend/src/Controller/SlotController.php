@@ -16,7 +16,7 @@ class SlotController extends ApiController
     #[Route('', methods: 'GET')]
     public function list(SlotService $slots): JsonResponse
     {
-        return $this->json(array_map(Presenter::slot(...), $slots->all()));
+        return $this->json(array_map(fn ($s) => Presenter::slot($s, $slots), $slots->all()));
     }
 
     /** Occurrences concrètes entre deux dates : ?from=…&to=… (31 jours max). */
@@ -36,7 +36,7 @@ class SlotController extends ApiController
         $slot = $slots->hydrate(new ClubSlot(), $this->body($req));
         $em->persist($slot);
         $em->flush();
-        return $this->json(Presenter::slot($slot), 201);
+        return $this->json(Presenter::slot($slot, $slots), 201);
     }
 
     #[Route('/{id}', methods: 'PUT', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
@@ -44,7 +44,18 @@ class SlotController extends ApiController
     {
         $slots->hydrate($slot, $this->body($req));
         $em->flush();
-        return $this->json(Presenter::slot($slot));
+        return $this->json(Presenter::slot($slot, $slots));
+    }
+
+    /** Plan d'occupation : {"allocations":[{"laneId":1,"sectionId":3},{"laneId":2,"sectionId":null}]} */
+    #[Route('/{id}/allocations', methods: 'PUT', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
+    public function allocations(ClubSlot $slot, Request $req, SlotService $slots, EntityManagerInterface $em): JsonResponse
+    {
+        $d = $this->body($req);
+        if (!isset($d['allocations']) || !is_array($d['allocations'])) throw new BadRequestHttpException('Champ requis : allocations');
+        $slots->setAllocations($slot, $d['allocations']);
+        $em->flush();
+        return $this->json(Presenter::slot($slot, $slots));
     }
 
     #[Route('/{id}', methods: 'DELETE', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]

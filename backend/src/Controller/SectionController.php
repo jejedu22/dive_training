@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\{Diver, Section};
+use App\Entity\{Diver, Section, User};
 use App\Service\Presenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
@@ -49,6 +49,26 @@ class SectionController extends ApiController
         $this->required($d, 'diverId');
         $diver = $em->find(Diver::class, $d['diverId']) ?? throw $this->createNotFoundException('Élève introuvable');
         $s->addDiver($diver);
+        $em->flush();
+        return $this->json(Presenter::section($s));
+    }
+
+    /** Associe un encadrant à la section : {"userId":3} */
+    #[Route('/{id}/instructors', methods: 'POST')]
+    public function addInstructor(Section $s, Request $req, EntityManagerInterface $em): JsonResponse
+    {
+        $d = $this->body($req);
+        $this->required($d, 'userId');
+        $s->addInstructor($em->find(User::class, $d['userId']) ?? throw $this->createNotFoundException('Encadrant introuvable'));
+        $em->flush();
+        return $this->json(Presenter::section($s));
+    }
+
+    #[Route('/{id}/instructors/{userId}', methods: 'DELETE')]
+    public function removeInstructor(Section $s, int $userId, EntityManagerInterface $em): JsonResponse
+    {
+        $u = $em->find(User::class, $userId) ?? throw $this->createNotFoundException();
+        $s->getInstructors()->removeElement($u);
         $em->flush();
         return $this->json(Presenter::section($s));
     }

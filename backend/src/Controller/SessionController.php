@@ -26,7 +26,11 @@ class SessionController extends ApiController
     /**
      * Crée une séance et une demande de réservation (PENDING) par ligne d'eau.
      * {"sectionId":1,"title":"Palmes","start":"…","end":"…","laneIds":[1,2], "force":false}
-     * Si des créneaux club existent, la séance doit tenir dans l'un d'eux ; un référent peut forcer ("force": true).
+     * Si des créneaux club existent :
+     *  - chaque ligne doit être ouverte sur un créneau qui contient la séance ;
+     *  - une ligne attribuée à une autre section est refusée ;
+     *  - une ligne attribuée à la section de la séance est confirmée directement (le plan vaut validation).
+     * Un référent peut passer outre ("force": true).
      */
     #[Route('', methods: 'POST')]
     public function create(Request $req, EntityManagerInterface $em, ReservationConflictChecker $checker, SlotService $slots): JsonResponse
@@ -44,14 +48,24 @@ class SessionController extends ApiController
         $force = !empty($d['force']) && $this->isGranted('ROLE_REFERENT');
         foreach (array_unique($d['laneIds']) as $laneId) {
             $lane = $em->find(Lane::class, $laneId) ?? throw $this->createNotFoundException("Ligne $laneId introuvable");
-            if (!$force && $slots->hasSlots() && !$slots->fits($start, $end, $lane->getPool())) {
-                $list = implode(' ; ', array_map(fn ($s) => $s->describe(), $slots->all()));
-                throw new UnprocessableEntityHttpException(sprintf('Hors des créneaux du club pour %s. Créneaux : %s', $lane->getPool()->getName(), $list));
+            $laneName = sprintf('%s (%s)', $lane->getName(), $lane->getPool()?->getName());
+            $status = Reservation::PENDING;
+            if ($slots->hasSlots()) {
+                $occ = $slots->findOccurrence($start, $end, $lane);
+                if (!$occ && !$force) {
+                    $list = implode(' ; ', array_map(fn ($s) => $s->describe(), $slots->all()));
+                    throw new UnprocessableEntityHttpException(sprintf('%s n\'est pas ouverte au club à cet horaire. Créneaux : %s', $laneName, $list));
+                }
+                $alloc = $occ ? $occ['slot']->allocationFor($lane) : null;
+                if ($alloc && $alloc->getSection()->getId() !== $section->getId() && !$force) {
+                    throw new ConflictHttpException(sprintf('%s est attribuée à « %s » sur ce créneau', $laneName, $alloc->getSection()->getName()));
+                }
+                if ($alloc && $alloc->getSection()->getId() === $section->getId()) $status = Reservation::CONFIRMED;
             }
             if ($checker->findConflicts($lane, $start, $end)) {
-                throw new ConflictHttpException(sprintf('%s (%s) est déjà réservée sur ce créneau', $lane->getName(), $lane->getPool()?->getName()));
+                throw new ConflictHttpException(sprintf('%s est déjà réservée sur ce créneau', $laneName));
             }
-            $session->addReservation((new Reservation())->setLane($lane)->setStartAt($start)->setEndAt($end)->setRequestedBy($this->getUser()));
+            $session->addReservation((new Reservation())->setLane($lane)->setStartAt($start)->setEndAt($end)->setRequestedBy($this->getUser())->setStatus($status));
         }
         foreach ($section->getDivers() as $diver) {
             $session->addParticipation((new Participation())->setDiver($diver));
