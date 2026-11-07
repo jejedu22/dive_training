@@ -6,6 +6,8 @@ services:
     build:
       context: ./frontend
       target: dev
+    environment:
+      DOMAIN: ${DOMAIN}
     volumes: ["./frontend:/app", "/app/node_modules"]
     labels:
       traefik.http.services.dive-front.loadbalancer.server.port: "5173"
