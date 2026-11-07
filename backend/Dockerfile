@@ -10,6 +10,8 @@ RUN composer install $COMPOSER_FLAGS --no-scripts --no-autoloader
 COPY . .
 RUN composer dump-autoload --optimize $( [ "$COMPOSER_FLAGS" = "--no-dev" ] && echo --classmap-authoritative )
 RUN mkdir -p /run/nginx
+COPY docker/php-fpm-logs.conf /usr/local/etc/php-fpm.d/zz-logs.conf
+COPY docker/php-logs.ini /usr/local/etc/php/conf.d/zz-logs.ini
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh
