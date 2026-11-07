@@ -1,4 +1,6 @@
-export interface User { id: number; email: string; name: string; referent: boolean }
+export type Role = 'ROLE_REFERENT' | 'ROLE_ADMIN'
+export interface User { id: number; email: string; name: string; roles: Role[]; referent: boolean; admin: boolean; active: boolean }
+export interface Health { api: string; database: string; hasUsers: boolean | null; jwtKeys: string }
 export interface Lane { id: number; name: string; maxDepth: number | null; poolId: number }
 export interface Pool { id: number; name: string; lanes: Lane[] }
 export interface Diver { id: number; firstName: string; lastName: string; level: string | null }

@@ -18,6 +18,7 @@ for i in $(seq 1 30); do
   echo "En attente de la base de données ($i/30)…"; sleep 2
 done
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
+php bin/console app:user:ensure-admin
 php bin/console cache:warmup
 chown -R www-data:www-data var
 exec "$@"

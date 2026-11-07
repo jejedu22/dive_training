@@ -14,7 +14,9 @@ const router = createRouter({
     { path: '/planning', component: () => import('./views/PlanningView.vue') },
     { path: '/sections', component: () => import('./views/SectionsView.vue') },
     { path: '/sessions/:id', component: () => import('./views/SessionView.vue'), props: true },
-    { path: '/pools', component: () => import('./views/PoolsView.vue') },
+    { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true } },
+    { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true } },
+    { path: '/account', component: () => import('./views/AccountView.vue') },
   ],
 })
 
@@ -24,7 +26,15 @@ const app = createApp(App).use(pinia).use(router)
 router.beforeEach(async (to) => {
   if (to.meta.public) return true
   if (!getToken()) return '/login'
-  await useAuth(pinia).fetchMe()
+  const auth = useAuth(pinia)
+  try {
+    await auth.fetchMe()
+  } catch {
+    auth.logout()
+    return '/login'
+  }
+  if (to.meta.admin && !auth.isAdmin) return '/planning'
+  if (to.meta.referent && !auth.isReferent) return '/planning'
   return true
 })
 

@@ -10,7 +10,10 @@ final class Presenter
 
     public static function user(User $u): array
     {
-        return ['id' => $u->getId(), 'email' => $u->getEmail(), 'name' => $u->getName(), 'referent' => $u->isReferent()];
+        return [
+            'id' => $u->getId(), 'email' => $u->getEmail(), 'name' => $u->getName(),
+            'roles' => $u->getStoredRoles(), 'referent' => $u->isReferent(), 'admin' => $u->isAdmin(), 'active' => $u->isActive(),
+        ];
     }
 
     public static function lane(Lane $l): array

@@ -8,6 +8,7 @@ services:
       traefik.enable: "true"
       traefik.docker.network: ${TRAEFIK_NETWORK:-web}
       traefik.http.routers.dive-front.rule: Host(`${DOMAIN}`)
+      traefik.http.routers.dive-front.priority: "1"
       traefik.http.routers.dive-front.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.dive-front.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
       traefik.http.services.dive-front.loadbalancer.server.port: "80"
@@ -21,6 +22,9 @@ services:
       APP_SECRET: ${APP_SECRET}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?serverVersion=16
       JWT_PASSPHRASE: ${JWT_PASSPHRASE}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ADMIN_NAME: ${ADMIN_NAME:-Administrateur}
     volumes: [jwtkeys:/var/www/html/config/jwt]
     depends_on:
       db:
@@ -31,7 +35,8 @@ services:
       traefik.http.routers.dive-api.rule: Host(`${DOMAIN}`) && PathPrefix(`/api`)
       traefik.http.routers.dive-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
       traefik.http.routers.dive-api.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
-      traefik.http.routers.dive-api.priority: "10"
+      # Doit être PLUS prioritaire que le routeur du front (même Host) : sinon /api part vers le front.
+      traefik.http.routers.dive-api.priority: "100"
       traefik.http.services.dive-api.loadbalancer.server.port: "80"
     networks: [traefik, internal]
 

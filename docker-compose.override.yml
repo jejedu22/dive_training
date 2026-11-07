@@ -8,6 +8,8 @@ services:
       target: dev
     environment:
       DOMAIN: ${DOMAIN}
+      # filet de sécurité : si une requête /api arrive quand même au serveur Vite, il la relaie au backend
+      API_PROXY: http://backend:80
     volumes: ["./frontend:/app", "/app/node_modules"]
     labels:
       traefik.http.services.dive-front.loadbalancer.server.port: "5173"

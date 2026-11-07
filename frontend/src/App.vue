@@ -22,8 +22,9 @@ function logout() {
     <router-link to="/planning">Planning</router-link>
     <router-link to="/sections">Sections</router-link>
     <router-link v-if="auth.isReferent" to="/pools">Bassins</router-link>
+    <router-link v-if="auth.isAdmin" to="/users">Comptes</router-link>
     <span class="spacer" />
-    <span>{{ auth.user.name }}<small v-if="auth.user.referent"> (référent)</small></span>
+    <router-link to="/account">{{ auth.user.name }}<small>{{ auth.isAdmin ? ' (admin)' : auth.isReferent ? ' (référent)' : '' }}</small></router-link>
     <button @click="logout">Déconnexion</button>
   </header>
   <div v-if="!online" class="offline">Hors ligne — les données et réservations nécessitent une connexion.</div>
