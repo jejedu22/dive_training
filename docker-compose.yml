@@ -22,7 +22,9 @@ services:
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?serverVersion=16
       JWT_PASSPHRASE: ${JWT_PASSPHRASE}
     volumes: [jwtkeys:/var/www/html/config/jwt]
-    depends_on: [db]
+    depends_on:
+      db:
+        condition: service_healthy
     labels:
       traefik.enable: "true"
       traefik.docker.network: ${TRAEFIK_NETWORK:-web}
@@ -41,6 +43,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
     networks: [internal]
 
 volumes:

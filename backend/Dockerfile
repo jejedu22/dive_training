@@ -9,6 +9,7 @@ COPY composer.json composer.lock ./
 RUN composer install $COMPOSER_FLAGS --no-scripts --no-autoloader
 COPY . .
 RUN composer dump-autoload --optimize $( [ "$COMPOSER_FLAGS" = "--no-dev" ] && echo --classmap-authoritative )
+RUN mkdir -p /run/nginx
 COPY docker/nginx.conf /etc/nginx/http.d/default.conf
 COPY docker/supervisord.conf /etc/supervisord.conf
 COPY docker/entrypoint.sh /entrypoint.sh

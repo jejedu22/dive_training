@@ -12,6 +12,11 @@ if [ ! -f config/jwt/private.pem ]; then
 fi
 
 mkdir -p var && chown -R www-data:www-data var
+# La base peut mettre quelques secondes à accepter les connexions
+for i in $(seq 1 30); do
+  php bin/console dbal:run-sql -q "SELECT 1" >/dev/null 2>&1 && break
+  echo "En attente de la base de données ($i/30)…"; sleep 2
+done
 php bin/console doctrine:migrations:migrate --no-interaction --allow-no-migration
 php bin/console cache:warmup
 chown -R www-data:www-data var
