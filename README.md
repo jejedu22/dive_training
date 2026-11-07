@@ -2,6 +2,7 @@
 Gestion de la formation de plongeurs en piscine : sections, planning de réservation des lignes d'eau (plusieurs bassins), suivi « qui plonge avec bouteille ».
 
 Stack : Symfony 7 (API JWT) · Vue 3 + Vite + Pinia · PostgreSQL · Docker · Traefik. Proposition détaillée : [docs/PROPOSITION.md](docs/PROPOSITION.md).
+PWA installable (service worker, manifeste, icônes) : le shell de l'app fonctionne hors ligne, l'API n'est jamais mise en cache. Nécessite HTTPS (ou localhost).
 
 ## Rôles
 - **Encadrant** (`ROLE_INSTRUCTOR`, seuls utilisateurs de l'app) : sections, élèves, demandes de séances/réservations, case « bouteille ».

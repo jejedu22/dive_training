@@ -14,3 +14,4 @@ input, select { padding:.4rem; border:1px solid var(--line); border-radius:4px; 
 table { border-collapse:collapse; width:100% } td, th { text-align:left; padding:.35rem .5rem; border-bottom:1px solid var(--line) }
 .badge { padding:.1rem .5rem; border-radius:10px; color:#fff; font-size:.8rem }
 .badge.PENDING { background:var(--warn) } .badge.CONFIRMED { background:var(--ok) } .badge.REJECTED { background:var(--ko) }
+.offline { background:var(--warn); color:#fff; text-align:center; padding:.4rem }
