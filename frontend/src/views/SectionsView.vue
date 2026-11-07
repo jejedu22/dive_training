@@ -1,77 +1,144 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import AppIcon from '../components/AppIcon.vue'
 import { del, get, post } from '../api'
-import type { Diver, Section } from '../types'
+import { useAuth } from '../stores/auth'
+import { useToast } from '../stores/toast'
+import type { Diver, Instructor, Section } from '../types'
 
+const auth = useAuth(), toast = useToast()
 const sections = ref<Section[]>([])
 const divers = ref<Diver[]>([])
+const instructors = ref<Instructor[]>([])
+const showNew = ref(false)
 const newSection = ref({ name: '', targetLevel: '', season: '' })
-const newDiver = ref({ firstName: '', lastName: '', level: '' })
-const pick = ref<Record<number, number>>({})
+const newDiver = ref<Record<number, { firstName: string; lastName: string; level: string }>>({})
+const pickDiver = ref<Record<number, number | undefined>>({})
+const pickInstructor = ref<Record<number, number | undefined>>({})
+const open = ref<Record<number, boolean>>({})
 
 async function load() {
-  ;[sections.value, divers.value] = await Promise.all([get<Section[]>('/sections'), get<Diver[]>('/divers')])
+  try {
+    ;[sections.value, divers.value, instructors.value] = await Promise.all([get<Section[]>('/sections'), get<Diver[]>('/divers'), get<Instructor[]>('/instructors')])
+  } catch (e) {
+    toast.error(e)
+  }
 }
 onMounted(load)
 
-async function addSection() {
+const isMine = (s: Section) => s.instructors.some((i) => i.id === auth.user?.id)
+const sorted = computed(() => [...sections.value].sort((a, b) => Number(isMine(b)) - Number(isMine(a)) || a.name.localeCompare(b.name)))
+
+async function run(fn: () => Promise<unknown>, ok: string) {
+  try {
+    await fn()
+    toast.ok(ok)
+    await load()
+  } catch (e) {
+    toast.error(e)
+  }
+}
+const addSection = () => run(async () => {
   await post('/sections', newSection.value)
   newSection.value = { name: '', targetLevel: '', season: '' }
-  await load()
+  showNew.value = false
+}, 'Section créée. Vous en êtes encadrant.')
+const attach = (s: Section) => pickDiver.value[s.id] && run(() => post(`/sections/${s.id}/divers`, { diverId: pickDiver.value[s.id] }).then(() => (pickDiver.value[s.id] = undefined)), 'Élève ajouté.')
+const detach = (s: Section, d: Diver) => run(() => del(`/sections/${s.id}/divers/${d.id}`), `${d.firstName} retiré(e) de la section.`)
+const addInstructor = (s: Section) => pickInstructor.value[s.id] && run(() => post(`/sections/${s.id}/instructors`, { userId: pickInstructor.value[s.id] }).then(() => (pickInstructor.value[s.id] = undefined)), 'Encadrant ajouté.')
+const removeInstructor = (s: Section, id: number) => run(() => del(`/sections/${s.id}/instructors/${id}`), 'Encadrant retiré.')
+const joinSection = (s: Section) => run(() => post(`/sections/${s.id}/instructors`, { userId: auth.user!.id }), `Vous encadrez maintenant ${s.name}.`)
+
+function diverForm(s: Section) {
+  return (newDiver.value[s.id] ??= { firstName: '', lastName: '', level: '' })
 }
-async function addDiver() {
-  await post('/divers', newDiver.value)
-  newDiver.value = { firstName: '', lastName: '', level: '' }
-  await load()
-}
-async function attach(s: Section) {
-  if (!pick.value[s.id]) return
-  await post(`/sections/${s.id}/divers`, { diverId: pick.value[s.id] })
-  await load()
-}
-async function detach(s: Section, d: Diver) {
-  await del(`/sections/${s.id}/divers/${d.id}`)
-  await load()
-}
+const createDiver = (s: Section) => run(async () => {
+  const f = diverForm(s)
+  const d = await post<Diver>('/divers', f)
+  await post(`/sections/${s.id}/divers`, { diverId: d.id })
+  newDiver.value[s.id] = { firstName: '', lastName: '', level: '' }
+}, 'Élève créé et ajouté.')
 </script>
 
 <template>
-  <div class="row" style="align-items:flex-start">
-    <form class="card" style="flex:1" @submit.prevent="addSection">
-      <h3>Nouvelle section</h3>
-      <div class="row">
-        <input v-model="newSection.name" placeholder="Nom" required />
-        <input v-model="newSection.targetLevel" placeholder="Niveau visé (N1…)" />
-        <input v-model="newSection.season" placeholder="Saison (2026-2027)" />
-        <button>Créer</button>
-      </div>
-    </form>
-    <form class="card" style="flex:1" @submit.prevent="addDiver">
-      <h3>Nouvel élève</h3>
-      <div class="row">
-        <input v-model="newDiver.firstName" placeholder="Prénom" required />
-        <input v-model="newDiver.lastName" placeholder="Nom" required />
-        <input v-model="newDiver.level" placeholder="Niveau" />
-        <button>Ajouter</button>
-      </div>
-    </form>
+  <div class="page-head">
+    <div><h1>Sections</h1><p>Groupes de formation, leurs encadrants et leurs élèves.</p></div>
+    <button v-if="!showNew" class="btn" @click="showNew = true"><AppIcon name="plus" /> Nouvelle section</button>
   </div>
 
-  <div v-for="s in sections" :key="s.id" class="card">
-    <h3>{{ s.name }} <small>{{ s.targetLevel }} {{ s.season }}</small></h3>
-    <p>Encadrants : {{ s.instructors.map((i) => i.name).join(', ') || '—' }}</p>
-    <table>
-      <tr v-for="d in s.divers" :key="d.id">
-        <td>{{ d.lastName }} {{ d.firstName }}</td><td>{{ d.level }}</td>
-        <td><button class="secondary" @click="detach(s, d)">Retirer</button></td>
-      </tr>
-    </table>
-    <div class="row" style="margin-top:.5rem">
-      <select v-model.number="pick[s.id]">
-        <option :value="undefined">Ajouter un élève…</option>
-        <option v-for="d in divers.filter((x) => !s.divers.some((y) => y.id === x.id))" :key="d.id" :value="d.id">{{ d.lastName }} {{ d.firstName }}</option>
-      </select>
-      <button @click="attach(s)">Ajouter</button>
+  <form v-if="showNew" class="card" style="margin-bottom:1rem" @submit.prevent="addSection">
+    <div class="card-head"><h2>Nouvelle section</h2><button type="button" class="btn btn-ghost btn-icon" @click="showNew = false"><AppIcon name="x" /></button></div>
+    <div class="fields">
+      <label class="field">Nom<input v-model="newSection.name" placeholder="ex. Niveau 1 – jeudi" required /></label>
+      <label class="field">Niveau visé<input v-model="newSection.targetLevel" placeholder="N1, N2, Apnée…" /></label>
+      <label class="field">Saison<input v-model="newSection.season" placeholder="2026-2027" /></label>
     </div>
+    <div class="row" style="margin-top:1rem"><button class="btn"><AppIcon name="check" /> Créer</button></div>
+  </form>
+
+  <div v-if="!sections.length && !showNew" class="card empty"><strong>Aucune section</strong>Créez votre première section de formation.</div>
+
+  <div class="stack">
+    <article v-for="s in sorted" :key="s.id" class="card" :class="{ mine: isMine(s) }">
+      <div class="card-head">
+        <div>
+          <h2>{{ s.name }} <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
+          <p>{{ [s.targetLevel, s.season].filter(Boolean).join(' · ') || '—' }} · {{ s.divers.length }} élève{{ s.divers.length > 1 ? 's' : '' }}</p>
+        </div>
+        <div class="row">
+          <button v-if="!isMine(s)" class="btn btn-secondary btn-sm" @click="joinSection(s)"><AppIcon name="plus" :size="15" /> J'encadre cette section</button>
+          <button class="btn btn-ghost btn-sm" @click="open[s.id] = !open[s.id]">{{ open[s.id] ? 'Replier' : 'Gérer' }}</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <span class="muted" style="font-size:.88rem">Encadrants :</span>
+        <span v-for="i in s.instructors" :key="i.id" class="chip">{{ i.name }}
+          <button v-if="open[s.id]" class="x" :title="`Retirer ${i.name}`" @click="removeInstructor(s, i.id)"><AppIcon name="x" :size="12" /></button></span>
+        <span v-if="!s.instructors.length" class="muted">aucun</span>
+      </div>
+
+      <template v-if="open[s.id]">
+        <div class="row" style="margin-top:.6rem">
+          <select v-model.number="pickInstructor[s.id]">
+            <option :value="undefined">Ajouter un encadrant…</option>
+            <option v-for="i in instructors.filter((x) => !s.instructors.some((y) => y.id === x.id))" :key="i.id" :value="i.id">{{ i.name }}</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" :disabled="!pickInstructor[s.id]" @click="addInstructor(s)">Ajouter</button>
+        </div>
+
+        <h3 class="sub">Élèves</h3>
+        <div v-if="s.divers.length" class="divers">
+          <div v-for="d in s.divers" :key="d.id" class="diver">
+            <span><strong>{{ d.lastName }}</strong> {{ d.firstName }} <small v-if="d.level">· {{ d.level }}</small></span>
+            <button class="btn btn-ghost btn-icon btn-sm" :title="`Retirer ${d.firstName}`" @click="detach(s, d)"><AppIcon name="x" :size="15" /></button>
+          </div>
+        </div>
+        <p v-else class="muted">Aucun élève.</p>
+
+        <div class="row" style="margin-top:.75rem">
+          <select v-model.number="pickDiver[s.id]">
+            <option :value="undefined">Élève existant…</option>
+            <option v-for="d in divers.filter((x) => !s.divers.some((y) => y.id === x.id))" :key="d.id" :value="d.id">{{ d.lastName }} {{ d.firstName }}</option>
+          </select>
+          <button class="btn btn-secondary btn-sm" :disabled="!pickDiver[s.id]" @click="attach(s)">Ajouter</button>
+        </div>
+        <form class="row" style="margin-top:.5rem" @submit.prevent="createDiver(s)">
+          <input v-model="diverForm(s).firstName" placeholder="Prénom" required />
+          <input v-model="diverForm(s).lastName" placeholder="Nom" required />
+          <input v-model="diverForm(s).level" placeholder="Niveau" style="width:110px" />
+          <button class="btn btn-secondary btn-sm"><AppIcon name="plus" :size="15" /> Nouvel élève</button>
+        </form>
+      </template>
+    </article>
   </div>
 </template>
+
+<style scoped>
+.card.mine { border-left: 4px solid var(--ok) }
+.card-head h2 { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap }
+.sub { margin: 1rem 0 .4rem; font-size: .88rem; color: var(--muted) }
+.divers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .25rem .75rem }
+.diver { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dashed var(--line); padding: .15rem 0 }
+.x { border: 0; background: none; padding: 0; margin-left: .15rem; cursor: pointer; color: inherit; display: inline-flex }
+</style>

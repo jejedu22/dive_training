@@ -8,7 +8,7 @@ export interface Section { id: number; name: string; targetLevel: string | null;
 export type Status = 'PENDING' | 'CONFIRMED' | 'REJECTED'
 export interface Reservation {
   id: number; sessionId: number; title: string; section: string; lane: Lane; pool: string
-  start: string; end: string; status: Status; requestedBy: string | null; validatedBy: string | null
+  start: string; end: string; status: Status; requestedBy: string | null; validatedBy: string | null; planned: boolean
 }
 export interface Participant { diver: Diver; usesTank: boolean }
 export interface DiveSession {
@@ -18,8 +18,24 @@ export interface DiveSession {
 export interface ClubSlot {
   id: number; label: string | null; weekdays: number[]; startTime: string; endTime: string
   poolId: number | null; pool: string | null; validFrom: string | null; validUntil: string | null; description: string
+  laneIds: number[]; availableLaneIds: number[]; allocations: Allocation[]
 }
-export interface SlotOccurrence { slotId: number; label: string; poolId: number | null; pool: string | null; start: string; end: string }
+export interface Allocation { laneId: number; sectionId: number; section: string }
+export interface SlotOccurrence {
+  slotId: number; label: string; poolId: number | null; pool: string | null; start: string; end: string
+  laneIds: number[]; allocations: Allocation[]
+}
+export interface OccupancyReservation {
+  id: number; sessionId: number; title: string; sectionId: number; section: string; status: Status; start: string; end: string; mine: boolean
+}
+export interface OccupancyLane {
+  laneId: number; lane: string; poolId: number; pool: string
+  allocation: { sectionId: number; section: string; mine: boolean } | null
+  reservations: OccupancyReservation[]
+}
+export interface Occurrence { slotId: number; label: string; start: string; end: string; lanes: OccupancyLane[] }
+export interface Occupancy { mySectionIds: number[]; occurrences: Occurrence[] }
+export interface Instructor { id: number; name: string }
 export interface CalendarData {
   slots: SlotOccurrence[]
   resources: { id: string; title: string; pool: string; poolId: number }[]

@@ -28,7 +28,7 @@ async function submit() {
   loading.value = true
   try {
     await auth.login(email.value, password.value)
-    router.push('/planning')
+    router.push('/occupation')
   } catch (e) {
     if (e instanceof ApiError && e.fromApi && e.status === 401) {
       error.value = e.message === 'Compte désactivé.' ? 'Ce compte est désactivé.' : 'E-mail ou mot de passe incorrect.'
@@ -43,16 +43,29 @@ async function submit() {
 </script>
 
 <template>
-  <form class="card" style="max-width:380px;margin:4rem auto" @submit.prevent="submit">
-    <h2>Connexion encadrant</h2>
-    <div class="row"><input v-model="email" type="email" placeholder="E-mail" autocomplete="username" autocapitalize="none" required style="flex:1" /></div>
-    <div class="row" style="margin-top:.5rem"><input v-model="password" type="password" placeholder="Mot de passe" autocomplete="current-password" required style="flex:1" /></div>
-    <p v-if="error" class="error">{{ error }}</p>
-    <ul v-if="hints.length" class="hints"><li v-for="h in hints" :key="h">{{ h }}</li></ul>
-    <button style="margin-top:.8rem" :disabled="loading">{{ loading ? 'Connexion…' : 'Se connecter' }}</button>
-  </form>
+  <div class="login">
+    <div class="brand"><img src="/pwa-192.png" alt="" width="72" height="72" /><h1>Dive Training</h1><p>Formation des plongeurs · planning des lignes d'eau</p></div>
+    <form class="card" @submit.prevent="submit">
+      <h2>Connexion encadrant</h2>
+      <label class="field">E-mail<input v-model="email" type="email" autocomplete="username" autocapitalize="none" inputmode="email" required /></label>
+      <label class="field">Mot de passe<input v-model="password" type="password" autocomplete="current-password" required /></label>
+      <p v-if="error" class="alert alert-ko">{{ error }}</p>
+      <ul v-if="hints.length" class="hints"><li v-for="h in hints" :key="h">{{ h }}</li></ul>
+      <button class="btn" :disabled="loading">{{ loading ? 'Connexion…' : 'Se connecter' }}</button>
+    </form>
+    <p class="muted foot">Pas de compte ? Demandez-le à un administrateur du club.</p>
+  </div>
 </template>
 
 <style scoped>
-.hints { font-size:.85rem; color:#5a4500; background:#fff6db; border:1px solid var(--warn); border-radius:4px; padding:.5rem .5rem .5rem 1.5rem }
+.login { max-width: 380px; margin: 6vh auto 0 }
+.brand { text-align: center; margin-bottom: 1.25rem }
+.brand img { border-radius: 18px; box-shadow: var(--shadow) }
+.brand h1 { margin-top: .6rem }
+.brand p { color: var(--muted); margin: .25rem 0 0 }
+form { display: flex; flex-direction: column; gap: .85rem; padding: 1.4rem }
+form .btn { width: 100%; margin-top: .25rem; min-height: 44px }
+.alert { margin: 0 }
+.hints { font-size: .85rem; color: #6a4800; background: var(--warn-50); border-radius: 8px; padding: .6rem .6rem .6rem 1.6rem; margin: 0 }
+.foot { text-align: center; font-size: .88rem }
 </style>

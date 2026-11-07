@@ -5,19 +5,23 @@ import App from './App.vue'
 import { getToken } from './api'
 import { useAuth } from './stores/auth'
 import './style.css'
+import './pwa'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior: () => ({ top: 0 }),
   routes: [
-    { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true } },
-    { path: '/', redirect: '/planning' },
-    { path: '/planning', component: () => import('./views/PlanningView.vue') },
-    { path: '/sections', component: () => import('./views/SectionsView.vue') },
-    { path: '/sessions/:id', component: () => import('./views/SessionView.vue'), props: true },
-    { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true } },
-    { path: '/slots', component: () => import('./views/SlotsView.vue') },
-    { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true } },
-    { path: '/account', component: () => import('./views/AccountView.vue') },
+    { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Connexion' } },
+    { path: '/', redirect: '/occupation' },
+    { path: '/occupation', component: () => import('./views/OccupationView.vue'), meta: { title: 'Lignes d\'eau' } },
+    { path: '/planning', component: () => import('./views/PlanningView.vue'), meta: { title: 'Planning' } },
+    { path: '/sections', component: () => import('./views/SectionsView.vue'), meta: { title: 'Sections' } },
+    { path: '/sessions/:id', component: () => import('./views/SessionView.vue'), props: true, meta: { title: 'Séance' } },
+    { path: '/slots', component: () => import('./views/SlotsView.vue'), meta: { title: 'Créneaux' } },
+    { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true, title: 'Bassins' } },
+    { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true, title: 'Comptes' } },
+    { path: '/account', component: () => import('./views/AccountView.vue'), meta: { title: 'Mon compte' } },
+    { path: '/:pathMatch(.*)*', redirect: '/occupation' },
   ],
 })
 
@@ -34,9 +38,12 @@ router.beforeEach(async (to) => {
     auth.logout()
     return '/login'
   }
-  if (to.meta.admin && !auth.isAdmin) return '/planning'
-  if (to.meta.referent && !auth.isReferent) return '/planning'
+  if (to.meta.admin && !auth.isAdmin) return '/occupation'
+  if (to.meta.referent && !auth.isReferent) return '/occupation'
   return true
+})
+router.afterEach((to) => {
+  document.title = to.meta.title ? `${to.meta.title} · Dive Training` : 'Dive Training'
 })
 
 app.mount('#app')
