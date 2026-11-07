@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { ApiError } from '../api'
 import { useAuth } from '../stores/auth'
 
 const email = ref(''), password = ref(''), error = ref('')
@@ -10,8 +11,13 @@ async function submit() {
   try {
     await auth.login(email.value, password.value)
     router.push('/planning')
-  } catch {
-    error.value = 'Identifiants invalides'
+  } catch (e) {
+    error.value =
+      e instanceof ApiError && e.status === 401
+        ? 'E-mail ou mot de passe incorrect (ou compte inexistant)'
+        : e instanceof ApiError
+          ? `Erreur serveur ${e.status} : ${e.message} — voir « docker compose logs backend »`
+          : 'API injoignable : vérifiez que /api est bien routé vers le backend'
   }
 }
 </script>
