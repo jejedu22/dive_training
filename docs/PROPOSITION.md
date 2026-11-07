@@ -1,5 +1,12 @@
 # Dive Training — gestion de la formation de plongeurs en piscine
 
+## 0. Décisions validées (version implémentée)
+- **Plusieurs bassins**, chacun avec **plusieurs lignes d'eau** ; la ligne d'eau est l'unité réservable.
+- **Matériel simplifié** : pas de parc ni de stock. Pour chaque séance, on note seulement **quel élève plonge avec bouteille** (et combien).
+- **Un référent valide** les réservations (`ROLE_REFERENT`) ; les encadrants les demandent.
+- **Accès réservé aux encadrants** : les élèves n'ont pas de compte (simple fiche `Diver`).
+- Les paragraphes 2 à 4 ci-dessous décrivent la proposition initiale ; le code fait foi (voir `backend/src/Entity`).
+
 ## 1. Besoins couverts
 - **Sections** (groupes de formation) : création, niveau visé (N1, N2, Bapteme…), encadrants, élèves, saison.
 - **Réservation de la fosse** : calendrier par créneaux, par ligne d'eau / profondeur, sans chevauchement.

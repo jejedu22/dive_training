@@ -37,6 +37,7 @@ services:
       APP_SECRET: ${APP_SECRET}
       DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}?serverVersion=16
       JWT_PASSPHRASE: ${JWT_PASSPHRASE}
+    volumes: [jwtkeys:/var/www/html/config/jwt]
     depends_on: [db]
     labels:
       - traefik.enable=true
@@ -61,6 +62,7 @@ services:
 volumes:
   letsencrypt:
   dbdata:
+  jwtkeys:
 
 networks:
   web:
