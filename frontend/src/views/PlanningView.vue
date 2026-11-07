@@ -2,16 +2,17 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '../components/AppIcon.vue'
-import PlanningGrid from '../components/PlanningGrid.vue'
+import SlotPlanning from '../components/SlotPlanning.vue'
 import SessionForm from '../components/SessionForm.vue'
 import { get, post } from '../api'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
-import { addDays, dateTime, dayLong, time, today } from '../format'
-import type { CalendarData, Pool, Reservation, Section } from '../types'
+import { addDays, dateTime, dayLong, range, time, today, ymd } from '../format'
+import type { CalendarData, Pool, Reservation, Section, SlotOccurrence } from '../types'
 
 const auth = useAuth(), toast = useToast(), router = useRouter(), route = useRoute()
 const day = ref(typeof route.query.date === 'string' ? route.query.date : today())
+const searching = ref(false)
 const data = ref<CalendarData>({ resources: [], events: [], slots: [] })
 const pools = ref<Pool[]>([])
 const sections = ref<Section[]>([])
@@ -31,9 +32,35 @@ onMounted(async () => {
   } catch (e) {
     toast.error(e)
   }
+  // Sans date demandée : ouvrir sur le prochain jour de créneau (aujourd'hui s'il y en a un)
+  if (typeof route.query.date !== 'string') await jump(1, true)
   await load()
 })
 watch(day, load)
+
+/**
+ * Jour du créneau suivant (dir = 1) ou précédent (dir = -1), en cherchant sur 4 semaines
+ * (pas 31 jours : avec un changement d'heure, la période dépasserait la limite de l'API).
+ * fromToday : premier jour à partir d'aujourd'hui qui a un créneau (aujourd'hui compris).
+ */
+const SEARCH_DAYS = 28
+async function jump(dir: 1 | -1, fromToday = false) {
+  searching.value = true
+  try {
+    const base = fromToday ? today() : day.value
+    const fromYmd = dir === 1 ? (fromToday ? base : addDays(base, 1)) : addDays(base, -SEARCH_DAYS)
+    const { from, to } = range(fromYmd, SEARCH_DAYS)
+    const occ = await get<SlotOccurrence[]>(`/slots/occurrences?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
+    const days = [...new Set(occ.map((o) => ymd(new Date(o.start))))].filter((d) => (dir === 1 ? d >= fromYmd : d < base))
+    const target = dir === 1 ? days[0] : days.at(-1)
+    if (target) day.value = target
+    else if (!fromToday) toast.show(`Aucun créneau ${dir === 1 ? 'dans les 4 prochaines semaines' : 'dans les 4 semaines précédentes'}.`, 'info')
+  } catch (e) {
+    toast.error(e)
+  } finally {
+    searching.value = false
+  }
+}
 
 async function decide(r: Reservation, action: 'confirm' | 'reject') {
   try {
@@ -44,7 +71,6 @@ async function decide(r: Reservation, action: 'confirm' | 'reject') {
     toast.error(e)
   }
 }
-const isToday = computed(() => day.value === today())
 </script>
 
 <template>
@@ -54,18 +80,18 @@ const isToday = computed(() => day.value === today())
       <p class="cap">{{ dayLong(`${day}T12:00:00`) }}</p>
     </div>
     <div class="row">
-      <button class="btn btn-secondary btn-icon" title="Jour précédent" @click="day = addDays(day, -1)"><AppIcon name="left" /></button>
+      <button class="btn btn-secondary btn-icon" title="Créneau précédent" :disabled="searching" @click="jump(-1)"><AppIcon name="left" /></button>
       <input v-model="day" type="date" aria-label="Jour" />
-      <button class="btn btn-secondary btn-icon" title="Jour suivant" @click="day = addDays(day, 1)"><AppIcon name="right" /></button>
-      <button class="btn btn-secondary" :disabled="isToday" @click="day = today()">Aujourd'hui</button>
+      <button class="btn btn-secondary btn-icon" title="Créneau suivant" :disabled="searching" @click="jump(1)"><AppIcon name="right" /></button>
+      <button class="btn btn-secondary" :disabled="searching" @click="jump(1, true)">Prochain créneau</button>
       <a href="#new-session" class="btn"><AppIcon name="plus" /> Nouvelle séance</a>
     </div>
   </div>
 
-  <PlanningGrid :data="data" :day="day" @open="(id) => router.push(`/sessions/${id}`)" />
+  <SlotPlanning :data="data" @open="(id) => router.push(`/sessions/${id}`)" />
   <p class="legend muted">
     <span class="sw confirmed" /> confirmée <span class="sw pending" /> en attente
-    <span class="sw slot" /> créneau club (ligne libre) <span class="sw alloc" /> ligne attribuée à une section
+    <span class="sw alloc" /> ligne attribuée à une section
   </p>
 
   <section v-if="auth.isReferent && pending.length" class="card" style="margin-top:1rem">
@@ -95,6 +121,5 @@ const isToday = computed(() => day.value === today())
 .legend { font-size: .82rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem }
 .sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px }
 .sw.confirmed { background: var(--ok) } .sw.pending { background: #d38a00 }
-.sw.slot { background: rgba(11,106,168,.15); border: 1px solid rgba(11,106,168,.4) }
 .sw.alloc { background: rgba(29,143,78,.2); border: 1px solid rgba(29,143,78,.5) }
 </style>

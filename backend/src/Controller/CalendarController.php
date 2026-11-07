@@ -36,7 +36,7 @@ class CalendarController extends ApiController
         // Créneaux du club sur la période (affichés en fond du planning)
         $from = $req->query->get('from') ? $this->date($req->query->get('from'), 'from') : null;
         $to = $req->query->get('to') ? $this->date($req->query->get('to'), 'to') : null;
-        $occ = ($from && $to && $to->getTimestamp() - $from->getTimestamp() <= 31 * 86400) ? $slots->occurrences($from, $to) : [];
+        $occ = ($from && $to && $to->getTimestamp() - $from->getTimestamp() <= (31 * 86400 + 7200)) ? $slots->occurrences($from, $to) : [];
 
         return $this->json(['resources' => $resources, 'events' => $events, 'slots' => array_map(Presenter::occurrence(...), $occ)]);
     }

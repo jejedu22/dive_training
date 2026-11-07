@@ -19,7 +19,7 @@ class OccupancyController extends ApiController
     {
         $from = $this->date($req->query->get('from', 'today'), 'from');
         $to = $req->query->get('to') ? $this->date($req->query->get('to'), 'to') : $from->modify('+7 days');
-        if ($to <= $from || $to->getTimestamp() - $from->getTimestamp() > 31 * 86400) throw new BadRequestHttpException('Période invalide (31 jours max)');
+        if ($to <= $from || $to->getTimestamp() - $from->getTimestamp() > (31 * 86400 + 7200)) throw new BadRequestHttpException('Période invalide (31 jours max)');
 
         /** @var User $me */
         $me = $this->getUser();

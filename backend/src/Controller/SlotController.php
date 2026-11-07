@@ -25,7 +25,7 @@ class SlotController extends ApiController
     {
         $from = $this->date($req->query->get('from', 'today'), 'from');
         $to = $req->query->get('to') ? $this->date($req->query->get('to'), 'to') : $from->modify('+7 days');
-        if ($to->getTimestamp() - $from->getTimestamp() > 31 * 86400) throw new BadRequestHttpException('Période limitée à 31 jours');
+        if ($to->getTimestamp() - $from->getTimestamp() > (31 * 86400 + 7200)) throw new BadRequestHttpException('Période limitée à 31 jours');
         return $this->json(array_map(Presenter::occurrence(...), $slots->occurrences($from, $to)));
     }
 

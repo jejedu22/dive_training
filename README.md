@@ -28,6 +28,8 @@ Menu **Créneaux** (référents) : les plages où le club dispose de la piscine,
 - **Séances** : une ligne attribuée à la section est **confirmée directement** ; une ligne libre attend la **validation d'un référent** ; une ligne fermée ou attribuée à une autre section est refusée. Un référent peut passer outre.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
+Page **Planning** : uniquement les créneaux du club du jour (une frise par créneau avec ses lignes ouvertes et la section attribuée) ; les séances exceptionnelles hors créneau sont listées à part. Les flèches passent d'un jour de créneau au suivant.
+
 Page **Lignes d'eau** (accueil) : semaine par semaine, chaque créneau avec ses lignes ouvertes, la section attribuée, les séances réservées, et un résumé **« Mes accès »** pour les sections que l'on encadre (on s'ajoute comme encadrant dans **Sections**). Bouton « Réserver » qui préremplit la séance.
 
 ## Application mobile (PWA)
