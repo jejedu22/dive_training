@@ -1,22 +1,14 @@
-# Dev local : http://dive.localhost (pas de TLS), hot reload Vite
+# Dev : hot reload. Pour un domaine local sans HTTPS, mettez dans .env :
+#   TRAEFIK_ENTRYPOINT=web   (entrypoint HTTP de votre Traefik)
+#   CERT_RESOLVER=           (vide : pas de certificat)
 services:
-  traefik:
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --api.insecure=true
-    ports: ["${HTTP_PORT:-80}:80", "${DASHBOARD_PORT:-8080}:8080"]
   frontend:
     build:
       context: ./frontend
       target: dev
     volumes: ["./frontend:/app", "/app/node_modules"]
     labels:
-      - traefik.http.routers.front.entrypoints=web
-      - traefik.http.routers.front.tls=false
-      - traefik.http.routers.front.tls.certresolver=
-      - traefik.http.services.front.loadbalancer.server.port=5173
+      traefik.http.services.dive-front.loadbalancer.server.port: "5173"
   backend:
     build:
       context: ./backend
@@ -28,7 +20,3 @@ services:
       - ./backend:/var/www/html
       - /var/www/html/vendor
       - jwtkeys:/var/www/html/config/jwt
-    labels:
-      - traefik.http.routers.api.entrypoints=web
-      - traefik.http.routers.api.tls=false
-      - traefik.http.routers.api.tls.certresolver=

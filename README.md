@@ -10,10 +10,10 @@ Stack : Symfony 7 (API JWT) · Vue 3 + Vite + Pinia · PostgreSQL · Docker · T
 ## Lancer (Docker + Traefik)
 ```
 cp .env.example .env
-docker compose up -d --build          # dev : http://dive.localhost
+docker compose up -d --build          # se branche sur VOTRE Traefik (voir .env)
 docker compose exec backend php bin/console app:user:create ref@club.fr "Référent" 'motdepasse' ROLE_REFERENT
 ```
-Production : `docker compose -f docker-compose.yml up -d --build` avec `DOMAIN` et `ACME_EMAIL` réels (HTTPS Let's Encrypt).
+Traefik n'est pas fourni : renseignez dans `.env` le réseau (`TRAEFIK_NETWORK`), l'entrypoint (`TRAEFIK_ENTRYPOINT`) et le resolver (`CERT_RESOLVER`) de votre Traefik, ainsi que `DOMAIN`. En production : `docker compose -f docker-compose.yml up -d --build`.
 
 ## Développement sans Docker
 ```

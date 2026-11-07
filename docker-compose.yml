@@ -1,33 +1,17 @@
+# Traefik n'est PAS inclus : on se branche sur votre Traefik existant via un réseau Docker externe.
+# Réglages (réseau, entrypoint, resolver) : voir .env.
 services:
-  traefik:
-    image: traefik:v3.1
-    restart: unless-stopped
-    command:
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.websecure.address=:443
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --certificatesresolvers.le.acme.email=${ACME_EMAIL}
-      - --certificatesresolvers.le.acme.storage=/letsencrypt/acme.json
-      - --certificatesresolvers.le.acme.tlschallenge=true
-    ports: ["${HTTP_PORT:-80}:80", "${HTTPS_PORT:-443}:443"]
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt:/letsencrypt
-    networks: [web]
-
   frontend:
     build: ./frontend
     restart: unless-stopped
     labels:
-      - traefik.enable=true
-      - traefik.docker.network=web
-      - traefik.http.routers.front.rule=Host(`${DOMAIN}`)
-      - traefik.http.routers.front.entrypoints=websecure
-      - traefik.http.routers.front.tls.certresolver=le
-      - traefik.http.services.front.loadbalancer.server.port=80
-    networks: [web]
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-web}
+      traefik.http.routers.dive-front.rule: Host(`${DOMAIN}`)
+      traefik.http.routers.dive-front.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.dive-front.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
+      traefik.http.services.dive-front.loadbalancer.server.port: "80"
+    networks: [traefik]
 
   backend:
     build: ./backend
@@ -40,14 +24,14 @@ services:
     volumes: [jwtkeys:/var/www/html/config/jwt]
     depends_on: [db]
     labels:
-      - traefik.enable=true
-      - traefik.docker.network=web
-      - traefik.http.routers.api.rule=Host(`${DOMAIN}`) && PathPrefix(`/api`)
-      - traefik.http.routers.api.entrypoints=websecure
-      - traefik.http.routers.api.tls.certresolver=le
-      - traefik.http.routers.api.priority=10
-      - traefik.http.services.api.loadbalancer.server.port=80
-    networks: [web, internal]
+      traefik.enable: "true"
+      traefik.docker.network: ${TRAEFIK_NETWORK:-web}
+      traefik.http.routers.dive-api.rule: Host(`${DOMAIN}`) && PathPrefix(`/api`)
+      traefik.http.routers.dive-api.entrypoints: ${TRAEFIK_ENTRYPOINT:-websecure}
+      traefik.http.routers.dive-api.tls.certresolver: ${CERT_RESOLVER:-letsencrypt}
+      traefik.http.routers.dive-api.priority: "10"
+      traefik.http.services.dive-api.loadbalancer.server.port: "80"
+    networks: [traefik, internal]
 
   db:
     image: postgres:16-alpine
@@ -60,12 +44,12 @@ services:
     networks: [internal]
 
 volumes:
-  letsencrypt:
   dbdata:
   jwtkeys:
 
 networks:
-  web:
-    name: web
+  traefik:
+    external: true
+    name: ${TRAEFIK_NETWORK:-web}
   internal:
     internal: true
