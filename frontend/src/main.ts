@@ -15,6 +15,7 @@ const router = createRouter({
     { path: '/sections', component: () => import('./views/SectionsView.vue') },
     { path: '/sessions/:id', component: () => import('./views/SessionView.vue'), props: true },
     { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true } },
+    { path: '/slots', component: () => import('./views/SlotsView.vue') },
     { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true } },
     { path: '/account', component: () => import('./views/AccountView.vue') },
   ],

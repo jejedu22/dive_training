@@ -25,6 +25,7 @@ services:
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       ADMIN_NAME: ${ADMIN_NAME:-Administrateur}
+      APP_TIMEZONE: ${APP_TIMEZONE:-Europe/Paris}
     volumes: [jwtkeys:/var/www/html/config/jwt]
     depends_on:
       db:

@@ -1,7 +1,7 @@
 <?php
 namespace App\Service;
 
-use App\Entity\{Diver, DiveSession, Lane, Participation, Pool, Reservation, Section, User};
+use App\Entity\{ClubSlot, Diver, DiveSession, Lane, Participation, Pool, Reservation, Section, User};
 
 /** Transforme les entités en tableaux JSON. */
 final class Presenter
@@ -68,5 +68,26 @@ final class Presenter
             $data['tankCount'] = count(array_filter($s->getParticipations()->toArray(), fn (Participation $p) => $p->usesTank()));
         }
         return $data;
+    }
+
+    public static function slot(ClubSlot $s): array
+    {
+        return [
+            'id' => $s->getId(), 'label' => $s->getLabel(), 'weekdays' => $s->getWeekdays(),
+            'startTime' => $s->getStartTime(), 'endTime' => $s->getEndTime(),
+            'poolId' => $s->getPool()?->getId(), 'pool' => $s->getPool()?->getName(),
+            'validFrom' => $s->getValidFrom()?->format('Y-m-d'), 'validUntil' => $s->getValidUntil()?->format('Y-m-d'),
+            'description' => $s->describe(),
+        ];
+    }
+
+    /** @param array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable} $o */
+    public static function occurrence(array $o): array
+    {
+        return [
+            'slotId' => $o['slot']->getId(), 'label' => $o['slot']->getLabel() ?? 'Créneau club',
+            'poolId' => $o['slot']->getPool()?->getId(), 'pool' => $o['slot']->getPool()?->getName(),
+            'start' => $o['start']->format(self::DATE), 'end' => $o['end']->format(self::DATE),
+        ];
     }
 }

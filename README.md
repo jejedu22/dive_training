@@ -21,6 +21,13 @@ docker compose exec backend php bin/console app:user:password jean@club.fr 'nouv
 
 **Diagnostic** : `https://<DOMAIN>/api/health` doit renvoyer du JSON (`api`, `database`, `jwtKeys`, `hasUsers`). Une page HTML ou une erreur du front veut dire que Traefik n'envoie pas `/api` au backend.
 
+## Créneaux du club
+Menu « Créneaux » : les plages où le club dispose de la piscine, ex. **lundi et mercredi 20:00–22:00**, pour tous les bassins ou un seul, avec une période de validité facultative (la saison).
+- Visibles en bleu sur le planning ; le formulaire de séance propose les créneaux du jour et préremplit les horaires.
+- Dès qu'au moins un créneau existe, une séance doit tenir entièrement dans un créneau compatible avec le bassin choisi. Un référent peut cocher « Autoriser hors des créneaux ».
+- Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
+- Création / modification : référents. Consultation : tous les encadrants.
+
 ## Lancer (Docker + Traefik)
 ```
 cp .env.example .env
@@ -38,6 +45,6 @@ Tests backend : `cd backend && vendor/bin/phpunit` (SQLite, règles de conflit e
 ## API principale
 `POST /api/login_check` · `GET /api/me` · `GET|POST /api/pools` (+`/lanes`) · `GET|POST /api/sections` (+`/divers`) · `GET|POST /api/divers` ·
 `POST /api/sessions` (séance + demandes de réservation) · `PUT /api/sessions/{id}/participants/{diverId}` (`usesTank`) ·
-`GET /api/calendar?from&to` · `POST /api/reservations/{id}/confirm|reject` (référent).
+`GET|POST|PUT|DELETE /api/slots` · `GET /api/slots/occurrences?from&to` · `GET /api/calendar?from&to` · `POST /api/reservations/{id}/confirm|reject` (référent).
 
 Règle : une ligne d'eau ne peut avoir deux réservations **confirmées** qui se chevauchent (contrôle à la demande et re-contrôle verrouillé à la validation).

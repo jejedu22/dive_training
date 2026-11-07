@@ -21,6 +21,7 @@ function logout() {
     <strong>🤿 Dive Training</strong>
     <router-link to="/planning">Planning</router-link>
     <router-link to="/sections">Sections</router-link>
+    <router-link to="/slots">Créneaux</router-link>
     <router-link v-if="auth.isReferent" to="/pools">Bassins</router-link>
     <router-link v-if="auth.isAdmin" to="/users">Comptes</router-link>
     <span class="spacer" />

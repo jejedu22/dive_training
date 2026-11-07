@@ -2,10 +2,10 @@
 namespace App\Controller;
 
 use App\Entity\{Diver, DiveSession, Lane, Participation, Reservation, Section};
-use App\Service\{Presenter, ReservationConflictChecker};
+use App\Service\{Presenter, ReservationConflictChecker, SlotService};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
-use Symfony\Component\HttpKernel\Exception\{BadRequestHttpException, ConflictHttpException};
+use Symfony\Component\HttpKernel\Exception\{BadRequestHttpException, ConflictHttpException, UnprocessableEntityHttpException};
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/sessions')]
@@ -25,10 +25,11 @@ class SessionController extends ApiController
 
     /**
      * Crée une séance et une demande de réservation (PENDING) par ligne d'eau.
-     * {"sectionId":1,"title":"Palmes","start":"…","end":"…","laneIds":[1,2]}
+     * {"sectionId":1,"title":"Palmes","start":"…","end":"…","laneIds":[1,2], "force":false}
+     * Si des créneaux club existent, la séance doit tenir dans l'un d'eux ; un référent peut forcer ("force": true).
      */
     #[Route('', methods: 'POST')]
-    public function create(Request $req, EntityManagerInterface $em, ReservationConflictChecker $checker): JsonResponse
+    public function create(Request $req, EntityManagerInterface $em, ReservationConflictChecker $checker, SlotService $slots): JsonResponse
     {
         $d = $this->body($req);
         $this->required($d, 'sectionId', 'title', 'start', 'end', 'laneIds');
@@ -40,8 +41,13 @@ class SessionController extends ApiController
         $section = $em->find(Section::class, $d['sectionId']) ?? throw $this->createNotFoundException('Section introuvable');
         $session = (new DiveSession())->setSection($section)->setTitle($d['title'])->setStartAt($start)->setEndAt($end)->setCreatedBy($this->getUser());
 
+        $force = !empty($d['force']) && $this->isGranted('ROLE_REFERENT');
         foreach (array_unique($d['laneIds']) as $laneId) {
             $lane = $em->find(Lane::class, $laneId) ?? throw $this->createNotFoundException("Ligne $laneId introuvable");
+            if (!$force && $slots->hasSlots() && !$slots->fits($start, $end, $lane->getPool())) {
+                $list = implode(' ; ', array_map(fn ($s) => $s->describe(), $slots->all()));
+                throw new UnprocessableEntityHttpException(sprintf('Hors des créneaux du club pour %s. Créneaux : %s', $lane->getPool()->getName(), $list));
+            }
             if ($checker->findConflicts($lane, $start, $end)) {
                 throw new ConflictHttpException(sprintf('%s (%s) est déjà réservée sur ce créneau', $lane->getName(), $lane->getPool()?->getName()));
             }

@@ -15,7 +15,13 @@ export interface DiveSession {
   id: number; title: string; sectionId: number; section: string; start: string; end: string
   reservations: Reservation[]; participants?: Participant[]; tankCount?: number
 }
+export interface ClubSlot {
+  id: number; label: string | null; weekdays: number[]; startTime: string; endTime: string
+  poolId: number | null; pool: string | null; validFrom: string | null; validUntil: string | null; description: string
+}
+export interface SlotOccurrence { slotId: number; label: string; poolId: number | null; pool: string | null; start: string; end: string }
 export interface CalendarData {
-  resources: { id: string; title: string; pool: string }[]
+  slots: SlotOccurrence[]
+  resources: { id: string; title: string; pool: string; poolId: number }[]
   events: { id: string; resourceId: string; title: string; start: string; end: string; status: Status; sessionId: number }[]
 }
