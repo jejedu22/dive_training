@@ -6,7 +6,11 @@ import { VitePWA } from 'vite-plugin-pwa'
 // DOMAIN (fourni par docker-compose) doit être autorisé, sinon Vite bloque la requête.
 const allowedHosts = ['localhost', '.localhost', ...(process.env.DOMAIN ? [process.env.DOMAIN] : [])]
 
+// Version affichée dans l'application (date de construction) pour savoir quelle version tourne
+const BUILD = new Date().toISOString().slice(0, 16).replace('T', ' ')
+
 export default defineConfig({
+  define: { __APP_BUILD__: JSON.stringify(BUILD) },
   plugins: [
     vue(),
     VitePWA({

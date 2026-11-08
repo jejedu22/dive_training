@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import { ApiError, get } from '../api'
 import { useAuth } from '../stores/auth'
 import AppIcon from '../components/AppIcon.vue'
-import { isStandalone, openInstall } from '../pwa'
+import { appBuild, isStandalone, openInstall, reloadLatest } from '../pwa'
 import type { Health } from '../types'
 
 const email = ref(''), password = ref(''), error = ref(''), hints = ref<string[]>([]), loading = ref(false)
@@ -57,6 +57,7 @@ async function submit() {
     </form>
     <p class="muted foot">Pas de compte ? Demandez-le à un administrateur du club.</p>
     <button v-if="!isStandalone" type="button" class="btn btn-secondary install" @click="openInstall"><AppIcon name="download" /> Installer l'application</button>
+    <p class="muted version">Version du {{ appBuild }} · <a href="#" @click.prevent="reloadLatest">charger la dernière version</a></p>
   </div>
 </template>
 
@@ -72,4 +73,5 @@ form .btn { width: 100%; margin-top: .25rem; min-height: 44px }
 .hints { font-size: .85rem; color: #6a4800; background: var(--warn-50); border-radius: 8px; padding: .6rem .6rem .6rem 1.6rem; margin: 0 }
 .foot { text-align: center; font-size: .88rem }
 .install { display: flex; margin: .5rem auto 0 }
+.version { text-align: center; font-size: .78rem; margin-top: 1rem }
 </style>

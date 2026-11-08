@@ -11,7 +11,9 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 /**
  * Lancée au démarrage du conteneur.
- * - Base sans compte : crée l'administrateur ADMIN_EMAIL / ADMIN_PASSWORD.
+ * - Aucun administrateur actif (base vide, ou comptes créés sans rôle admin) :
+ *   crée le compte ADMIN_EMAIL / ADMIN_PASSWORD, ou s'il existe déjà, le réactive et le promeut
+ *   administrateur (sans toucher à son mot de passe).
  * - Sinon : ne modifie rien, mais signale dans les logs ce qui empêcherait l'administrateur de se connecter.
  */
 #[AsCommand(name: 'app:user:ensure-admin', description: 'Crée le premier administrateur depuis ADMIN_EMAIL/ADMIN_PASSWORD si aucun compte n\'existe, et diagnostique le compte admin')]
@@ -25,23 +27,27 @@ class UserEnsureAdminCommand extends Command
         $password = (string) getenv('ADMIN_PASSWORD');
         $fix = 'Pour réparer : docker compose exec backend php bin/console app:admin:reset';
 
-        if ($this->users->count() === 0) {
+        if ($this->users->countActiveAdmins() === 0) {
             if ($email === '' || $password === '') {
-                $out->writeln('<comment>Aucun compte. Définissez ADMIN_EMAIL et ADMIN_PASSWORD dans .env puis redémarrez, ou lancez app:admin:reset.</comment>');
+                $out->writeln("<error>Aucun administrateur. Définissez ADMIN_EMAIL et ADMIN_PASSWORD dans .env puis redémarrez le backend. $fix</error>");
                 return Command::SUCCESS;
             }
             try {
-                $u = $this->users->create($email, getenv('ADMIN_NAME') ?: 'Administrateur', $password, ['ROLE_ADMIN']);
-                $out->writeln(sprintf('Administrateur créé : %s (mot de passe de %d caractères)', $u->getEmail(), mb_strlen($password)));
+                $u = $this->em->getRepository(User::class)->findOneBy(['email' => $email]);
+                if (!$u) {
+                    $u = $this->users->create($email, getenv('ADMIN_NAME') ?: 'Administrateur', $password, ['ROLE_ADMIN']);
+                    $out->writeln(sprintf('Administrateur créé : %s (aucun administrateur n\'existait ; mot de passe de %d caractères).', $u->getEmail(), mb_strlen($password)));
+                } else {
+                    $u->setRoles(array_unique([...$u->getStoredRoles(), 'ROLE_ADMIN']))->setActive(true);
+                    $this->em->flush();
+                    $out->writeln("Aucun administrateur : le compte existant $email est maintenant administrateur (mot de passe inchangé).");
+                }
             } catch (\Throwable $e) {
                 $out->writeln('<error>Administrateur non créé : ' . $e->getMessage() . '</error>');
             }
             return Command::SUCCESS; // ne jamais empêcher le conteneur de démarrer
         }
 
-        if ($this->users->countActiveAdmins() === 0) {
-            $out->writeln("<error>Aucun administrateur actif : personne ne peut gérer les comptes. $fix</error>");
-        }
         if ($email !== '') {
             $u = $this->em->getRepository(User::class)->findOneBy(['email' => $email]);
             if (!$u) {
