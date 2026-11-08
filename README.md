@@ -9,7 +9,7 @@ Seuls les encadrants ont un compte (les élèves sont de simples fiches).
 - **Référent** (`ROLE_REFERENT`) : + valide/refuse les réservations, gère bassins et lignes d'eau.
 - **Administrateur** (`ROLE_ADMIN`) : + crée/désactive les comptes, change les rôles, réinitialise les mots de passe (menu « Comptes »).
 
-**Premier compte** : renseignez `ADMIN_EMAIL` / `ADMIN_PASSWORD` dans `.env` ; il est créé automatiquement au démarrage du backend si la base n'a aucun compte. Ensuite tout se fait dans l'application.
+**Premier compte** : renseignez `ADMIN_EMAIL` / `ADMIN_PASSWORD` dans `.env` ; au démarrage du backend, s'il n'existe aucun administrateur actif, ce compte est créé (ou, s'il existe déjà, promu administrateur sans changer son mot de passe). Ensuite tout se fait dans l'application.
 L'e-mail de connexion ignore majuscules et espaces. Chacun peut changer son mot de passe (clic sur son nom).
 
 En secours, en ligne de commande :

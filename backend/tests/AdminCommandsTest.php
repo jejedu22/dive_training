@@ -53,7 +53,9 @@ class AdminCommandsTest extends KernelTestCase
         $em = static::getContainer()->get(EntityManagerInterface::class);
         $em->getRepository(\App\Entity\User::class)->findOneBy(['email' => 'admin@club.fr'])->setActive(false);
         $em->flush();
-        $this->assertStringContainsString("n'est pas actif", $this->cmd('app:user:ensure-admin'));
+        // aucun admin actif : au démarrage, le compte ADMIN_EMAIL est réactivé et promu, mot de passe inchangé
+        $this->assertStringContainsString('est maintenant administrateur', $this->cmd('app:user:ensure-admin'));
+        $this->assertTrue($this->login('admin@club.fr', 'ancienmdp'));
 
         $out = $this->cmd('app:admin:reset');   // valeurs de ADMIN_EMAIL / ADMIN_PASSWORD
         $this->assertStringContainsString('réparé', $out);
@@ -64,5 +66,21 @@ class AdminCommandsTest extends KernelTestCase
         $this->assertTrue($this->login('chef@club.fr', 'motdepasse2'));
         $this->assertStringContainsString('chef@club.fr', $this->cmd('app:user:list'));
         $this->assertStringContainsString('Mot de passe trop court', $this->cmd('app:admin:reset', ['email' => 'x@club.fr', 'password' => 'court']));
+    }
+
+    public function testAdminIsCreatedWhenOnlyNonAdminAccountsExist(): void
+    {
+        // Cas réel : un référent créé en ligne de commande avant la création automatique de l'admin
+        $this->cmd('app:user:create', ['email' => 'ref@club.fr', 'name' => 'Ref', 'password' => 'motdepasse', 'roles' => ['ROLE_REFERENT']]);
+        $this->assertStringContainsString('Administrateur créé : admin@club.fr', $this->cmd('app:user:ensure-admin'));
+        $this->assertTrue($this->login('admin@club.fr', 'secret123'));
+        $this->assertStringContainsString('Administrateur admin@club.fr : OK', $this->cmd('app:user:ensure-admin'), 'idempotent');
+    }
+
+    public function testExistingAccountIsPromotedWithoutChangingItsPassword(): void
+    {
+        $this->cmd('app:user:create', ['email' => 'admin@club.fr', 'name' => 'Moi', 'password' => 'monmotdepasse', 'roles' => ['ROLE_REFERENT']]);
+        $this->assertStringContainsString('est maintenant administrateur', $this->cmd('app:user:ensure-admin'));
+        $this->assertTrue($this->login('admin@club.fr', 'monmotdepasse'));
     }
 }
