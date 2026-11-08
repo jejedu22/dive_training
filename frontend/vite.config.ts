@@ -1,6 +1,33 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import type { Plugin } from 'vite'
+
+/**
+ * En mode développement uniquement : /sw.js « autodestructeur ».
+ * Un navigateur qui a installé le service worker de la version de production (/sw.js) le garde
+ * tant qu'il ne trouve pas de /sw.js valide ; il afficherait indéfiniment l'ancienne application.
+ * Ce script le remplace, vide les caches, se désinscrit et recharge les onglets sur la version à jour.
+ */
+const SELF_DESTROYING_SW = `
+self.addEventListener('install', () => self.skipWaiting())
+self.addEventListener('activate', (event) => event.waitUntil((async () => {
+  for (const key of await caches.keys()) await caches.delete(key)
+  await self.registration.unregister()
+  for (const client of await self.clients.matchAll({ type: 'window' })) client.navigate(client.url)
+})()))
+`
+const devSwKillSwitch = (): Plugin => ({
+  name: 'dev-sw-kill-switch',
+  apply: 'serve',
+  configureServer(server) {
+    server.middlewares.use('/sw.js', (_req, res) => {
+      res.setHeader('Content-Type', 'application/javascript')
+      res.setHeader('Cache-Control', 'no-cache')
+      res.end(SELF_DESTROYING_SW)
+    })
+  },
+})
 
 // En dev derrière Traefik, /api est routé vers le backend. En dev « nu » : proxy vers Symfony.
 // DOMAIN (fourni par docker-compose) doit être autorisé, sinon Vite bloque la requête.
@@ -12,6 +39,7 @@ const BUILD = new Date().toISOString().slice(0, 16).replace('T', ' ')
 export default defineConfig({
   define: { __APP_BUILD__: JSON.stringify(BUILD) },
   plugins: [
+    devSwKillSwitch(),
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
