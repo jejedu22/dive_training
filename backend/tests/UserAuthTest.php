@@ -54,7 +54,7 @@ class UserAuthTest extends WebTestCase
     public function testEnsureAdminCreatesFirstAccountOnlyOnce(): void
     {
         $this->assertStringContainsString('Administrateur créé : admin@club.fr', $this->ensureAdmin());
-        $this->assertStringContainsString('aucun administrateur créé', $this->ensureAdmin('autre@club.fr'));
+        $this->assertStringContainsString('ne correspond à aucun compte', $this->ensureAdmin('autre@club.fr'), 'pas de second compte créé, mais un diagnostic');
         // e-mail normalisé : la casse et les espaces ne bloquent pas la connexion
         [$code, $data] = $this->login(' ADMIN@club.FR', 'secret123');
         $this->assertSame(200, $code, json_encode($data));

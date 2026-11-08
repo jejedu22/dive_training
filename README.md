@@ -18,6 +18,14 @@ docker compose exec backend php bin/console app:user:create jean@club.fr "Jean" 
 docker compose exec backend php bin/console app:user:password jean@club.fr 'nouveaumotdepasse'
 ```
 
+**L'administrateur n'arrive pas à se connecter ?**
+```
+docker compose logs backend | grep -i admin        # diagnostic affiché à chaque démarrage
+docker compose exec backend php bin/console app:user:list
+docker compose exec backend php bin/console app:admin:reset vous@club.fr 'nouveaumotdepasse'
+```
+`app:admin:reset` crée le compte s'il n'existe pas, sinon le réactive, lui donne le rôle administrateur et remplace son mot de passe (sans arguments : valeurs de `ADMIN_EMAIL` / `ADMIN_PASSWORD`). `ADMIN_PASSWORD` ne sert qu'à la création du tout premier compte ; un `$` dans `.env` doit être protégé par des apostrophes.
+
 **Diagnostic** : `https://<DOMAIN>/api/health` doit renvoyer du JSON (`api`, `database`, `jwtKeys`, `hasUsers`). Une page HTML ou une erreur du front veut dire que Traefik n'envoie pas `/api` au backend.
 
 ## Créneaux du club et lignes d'eau
