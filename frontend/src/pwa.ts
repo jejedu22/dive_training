@@ -59,3 +59,20 @@ export async function installChecks() {
     serviceWorker: !!reg,
   }
 }
+
+/** Version de l'application (date de construction du front, heure UTC). */
+export const appBuild = __APP_BUILD__
+
+/**
+ * Force le chargement de la dernière version : désinscrit le service worker, vide ses caches et recharge.
+ * Utile si l'écran affiche une ancienne version après une mise à jour du serveur.
+ */
+export async function reloadLatest() {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations()) ?? []
+    await Promise.all(regs.map((r) => r.unregister()))
+    if ('caches' in window) await Promise.all((await caches.keys()).map((k) => caches.delete(k)))
+  } finally {
+    location.reload()
+  }
+}

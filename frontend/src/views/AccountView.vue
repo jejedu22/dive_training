@@ -5,7 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { put } from '../api'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
-import { isStandalone, openInstall } from '../pwa'
+import { appBuild, isStandalone, openInstall, reloadLatest } from '../pwa'
 
 const auth = useAuth(), toast = useToast(), router = useRouter()
 const form = ref({ currentPassword: '', newPassword: '', confirm: '' })
@@ -44,6 +44,8 @@ function logout() {
         <h3>Application</h3>
         <p v-if="isStandalone" class="muted"><AppIcon name="check" :size="15" /> Installée sur cet appareil.</p>
         <button v-else class="btn btn-secondary" @click="openInstall"><AppIcon name="download" /> Installer l'application</button>
+        <p class="muted version">Version du {{ appBuild }} (UTC)</p>
+        <button class="btn btn-ghost btn-sm" @click="reloadLatest">Charger la dernière version</button>
       </div>
       <button class="btn btn-secondary" style="margin-top:1rem" @click="logout"><AppIcon name="logout" /> Déconnexion</button>
     </section>
@@ -68,4 +70,5 @@ function logout() {
 .block { margin-top: 1rem; padding-top: 1rem; border-top: 1px solid var(--line) }
 .block h3 { margin-bottom: .5rem }
 .block p { display: flex; align-items: center; gap: .3rem }
+.version { font-size: .82rem; margin: .75rem 0 .25rem }
 </style>
