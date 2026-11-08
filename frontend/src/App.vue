@@ -45,7 +45,6 @@ function logout() {
           <router-link v-for="n in nav" :key="n.to" :to="n.to"><AppIcon :name="n.icon" :size="17" />{{ n.label }}</router-link>
         </nav>
         <span class="spacer" />
-        <button v-if="!isStandalone" class="btn btn-sm install" title="Installer l'application sur cet appareil" @click="openInstall"><AppIcon name="download" :size="16" /> Installer</button>
         <router-link to="/account" class="me hide-mobile" :title="auth.user.email">
           <span class="avatar">{{ auth.user.name.slice(0, 1).toUpperCase() }}</span>
           <span>{{ auth.user.name }}<small>{{ auth.isAdmin ? 'Administrateur' : auth.isReferent ? 'Référent' : 'Encadrant' }}</small></span>
@@ -89,7 +88,6 @@ function logout() {
 .me small { display: block; color: #bcd9ef; font-size: .75rem }
 .avatar { width: 32px; height: 32px; border-radius: 50%; background: #fff; color: var(--primary); display: grid; place-items: center; font-weight: 700; flex: none }
 .app-header .btn-ghost { color: #d3e6f5 } .app-header .btn-ghost:hover { background: rgba(255,255,255,.12); color: #fff }
-.install { background: #fff; color: var(--primary) } .install:hover { background: var(--primary-50) }
 .offline { display: flex; justify-content: center; align-items: center; gap: .4rem; background: var(--warn-50); color: #7a4e00; padding: .4rem; font-size: .9rem }
 
 .tabbar { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; height: var(--tabbar-h); padding-bottom: env(safe-area-inset-bottom);
