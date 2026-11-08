@@ -71,7 +71,7 @@ export default defineConfig({
         runtimeCaching: [{ urlPattern: /^\/api\//, handler: 'NetworkOnly' }],
         cleanupOutdatedCaches: true,
       },
-      // Aussi en mode développement (docker-compose.override.yml), pour pouvoir installer l'app quel que soit le mode
+      // Aussi en mode développement (docker-compose.dev.yml), pour pouvoir installer l'app quel que soit le mode
       devOptions: { enabled: true, navigateFallbackAllowlist: [/^\/$/] },
     }),
   ],

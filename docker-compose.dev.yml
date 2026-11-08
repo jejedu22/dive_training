@@ -1,3 +1,5 @@
+# Mode DÉVELOPPEMENT (hot reload Vite, Symfony en dev). Pas utilisé par défaut.
+# Lancement : docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
 # Dev : hot reload. Pour un domaine local sans HTTPS, mettez dans .env :
 #   TRAEFIK_ENTRYPOINT=web   (entrypoint HTTP de votre Traefik)
 #   CERT_RESOLVER=           (vide : pas de certificat)

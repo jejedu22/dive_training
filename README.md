@@ -46,9 +46,20 @@ L'application est une PWA : installable sur téléphone et ordinateur. Le bouton
 ## Lancer (Docker + Traefik)
 ```
 cp .env.example .env
-docker compose up -d --build          # se branche sur VOTRE Traefik (voir .env)
+docker compose up -d --build          # PRODUCTION (par défaut), branchée sur VOTRE Traefik
 ```
-Traefik n'est pas fourni : renseignez dans `.env` le réseau (`TRAEFIK_NETWORK`), l'entrypoint (`TRAEFIK_ENTRYPOINT`) et le resolver (`CERT_RESOLVER`) de votre Traefik, ainsi que `DOMAIN`. En production : `docker compose -f docker-compose.yml up -d --build`.
+Traefik n'est pas fourni : renseignez dans `.env` le réseau (`TRAEFIK_NETWORK`), l'entrypoint (`TRAEFIK_ENTRYPOINT`) et le resolver (`CERT_RESOLVER`) de votre Traefik, ainsi que `DOMAIN`.
+
+Mise à jour du serveur :
+```
+git pull
+docker compose up -d --build
+```
+
+Mode développement (rechargement à chaud, erreurs détaillées) — à ne pas utiliser sur le serveur :
+```
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d --build
+```
 
 ## Développement sans Docker
 ```

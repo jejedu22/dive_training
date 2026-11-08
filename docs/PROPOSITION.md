@@ -62,7 +62,7 @@ Internet → Traefik (80/443, Let's Encrypt)
 ```
 - Un seul domaine : `/api` routé vers le backend (pas de CORS en prod).
 - Réseaux : `web` (Traefik) et `internal` (backend ↔ db).
-- Fichiers fournis : `docker-compose.yml` (prod), `docker-compose.override.yml` (dev), `.env.example`.
+- Fichiers fournis : `docker-compose.yml` (prod), `docker-compose.dev.yml` (dev), `.env.example`.
 
 ## 7. Qualité & sécurité
 JWT (lexik) + refresh, validation Symfony, tests PHPUnit sur la règle de chevauchement, Vitest/Playwright côté front, PHPStan, CI GitHub Actions, sauvegarde `pg_dump` planifiée, RGPD (données médicales : stocker seulement la date de validité du certificat).

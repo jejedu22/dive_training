@@ -16,7 +16,7 @@ use Symfony\Component\Console\Output\OutputInterface;
  *   administrateur (sans toucher à son mot de passe).
  * - Sinon : ne modifie rien, mais signale dans les logs ce qui empêcherait l'administrateur de se connecter.
  */
-#[AsCommand(name: 'app:user:ensure-admin', description: 'Crée le premier administrateur depuis ADMIN_EMAIL/ADMIN_PASSWORD si aucun compte n\'existe, et diagnostique le compte admin')]
+#[AsCommand(name: 'app:user:ensure-admin', description: 'Crée ou promeut ADMIN_EMAIL s\'il n\'existe aucun administrateur actif, et diagnostique le compte admin')]
 class UserEnsureAdminCommand extends Command
 {
     public function __construct(private UserManager $users, private EntityManagerInterface $em) { parent::__construct(); }
