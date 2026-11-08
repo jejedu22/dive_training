@@ -11,6 +11,7 @@ export const useToast = defineStore('toast', {
     show(text: string, kind: ToastKind = 'ok') {
       const id = next++
       this.items.push({ id, text, kind })
+      if (this.items.length > 3) this.items.splice(0, this.items.length - 3) // pas plus de 3 à l'écran
       setTimeout(() => this.dismiss(id), kind === 'error' ? 6000 : 3500)
     },
     ok(text: string) { this.show(text, 'ok') },

@@ -12,7 +12,7 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
   routes: [
     { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Connexion' } },
-    { path: '/', redirect: '/occupation' },
+    { path: '/', component: { render: () => null } }, // redirigé vers la page d'accueil choisie (voir beforeEach)
     { path: '/occupation', component: () => import('./views/OccupationView.vue'), meta: { title: 'Lignes d\'eau' } },
     { path: '/planning', component: () => import('./views/PlanningView.vue'), meta: { title: 'Planning' } },
     { path: '/sections', component: () => import('./views/SectionsView.vue'), meta: { title: 'Sections' } },
@@ -38,6 +38,7 @@ router.beforeEach(async (to) => {
     auth.logout()
     return '/login'
   }
+  if (to.path === '/') return `/${auth.prefs.homePage}` // page d'accueil choisie dans « Mon compte »
   if (to.meta.admin && !auth.isAdmin) return '/occupation'
   if (to.meta.referent && !auth.isReferent) return '/occupation'
   return true

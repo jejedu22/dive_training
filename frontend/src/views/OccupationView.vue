@@ -13,7 +13,7 @@ const auth = useAuth(), toast = useToast(), router = useRouter()
 const week = ref(mondayOf(today()))
 const data = ref<Occupancy | null>(null)
 const loading = ref(false)
-const onlyMine = ref(false)
+const onlyMine = ref(auth.prefs.onlyMine) // préférence du compte
 
 async function load() {
   loading.value = true

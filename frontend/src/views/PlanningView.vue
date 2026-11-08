@@ -14,12 +14,8 @@ import { chipStyle } from '../colors'
 
 const auth = useAuth(), toast = useToast(), router = useRouter(), route = useRoute()
 const day = ref(typeof route.query.date === 'string' ? route.query.date : today())
-/** Vue « jour » (frises par créneau) ou « mois » (calendrier). Le choix est mémorisé sur l'appareil. */
-const MODE_KEY = 'dive_planning_mode'
-const readMode = (): 'day' | 'month' => {
-  if (route.query.date) return 'day'
-  try { return localStorage.getItem(MODE_KEY) === 'month' ? 'month' : 'day' } catch { return 'day' }
-}
+/** Vue « jour » (frises par créneau) ou « mois » (calendrier). Par défaut : la préférence du compte. */
+const readMode = (): 'day' | 'month' => (route.query.date ? 'day' : auth.prefs.planningView)
 const mode = ref<'day' | 'month'>(readMode())
 const month = ref(day.value.slice(0, 7))
 const shiftMonth = (n: number) => {
@@ -65,7 +61,6 @@ onMounted(async () => {
 watch(day, () => mode.value === 'day' && load())
 watch(month, () => mode.value === 'month' && load())
 watch(mode, (m) => {
-  try { localStorage.setItem(MODE_KEY, m) } catch { /* stockage indisponible : on ignore */ }
   if (m === 'month') month.value = day.value.slice(0, 7)
   load()
 })

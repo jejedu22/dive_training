@@ -1,5 +1,12 @@
 export type Role = 'ROLE_REFERENT' | 'ROLE_ADMIN'
-export interface User { id: number; email: string; name: string; roles: Role[]; referent: boolean; admin: boolean; active: boolean }
+export interface Preferences { homePage: 'occupation' | 'planning' | 'sections'; planningView: 'day' | 'month'; onlyMine: boolean }
+export interface User {
+  id: number; email: string; name: string; phone: string | null; avatarColor: string
+  roles: Role[]; referent: boolean; admin: boolean; active: boolean
+  createdAt: string | null; lastLoginAt: string | null
+  preferences?: Preferences                                    // seulement pour l'utilisateur connecté
+  sections?: { id: number; name: string; color: string }[]     // seulement dans la gestion des comptes
+}
 export interface Health { api: string; database: string; hasUsers: boolean | null; jwtKeys: string }
 export interface Lane { id: number; name: string; maxDepth: number | null; poolId: number }
 export interface Pool { id: number; name: string; lanes: Lane[] }

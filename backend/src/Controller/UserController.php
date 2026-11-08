@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\User;
+use App\Entity\{Section, User};
 use App\Service\{Presenter, UserManager};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
@@ -16,7 +16,13 @@ class UserController extends ApiController
     #[Route('', methods: 'GET')]
     public function list(EntityManagerInterface $em): JsonResponse
     {
-        return $this->json(array_map(Presenter::user(...), $em->getRepository(User::class)->findBy([], ['name' => 'ASC'])));
+        // Sections encadrées par chaque compte
+        $led = [];
+        foreach ($em->getRepository(Section::class)->findBy([], ['name' => 'ASC']) as $s) {
+            foreach ($s->getInstructors() as $i) $led[$i->getId()][] = ['id' => $s->getId(), 'name' => $s->getName(), 'color' => $s->getColor()];
+        }
+        return $this->json(array_map(fn (User $u) => Presenter::user($u) + ['sections' => $led[$u->getId()] ?? []],
+            $em->getRepository(User::class)->findBy([], ['name' => 'ASC'])));
     }
 
     /** {"email","name","password","roles":["ROLE_REFERENT"]} */
@@ -28,7 +34,7 @@ class UserController extends ApiController
         return $this->json(Presenter::user($users->create($d['email'], $d['name'], $d['password'], (array) ($d['roles'] ?? []))), 201);
     }
 
-    /** {"name"?, "roles"?, "active"?, "password"?} */
+    /** {"name"?, "email"?, "phone"?, "roles"?, "active"?, "password"?} */
     #[Route('/{id}', methods: 'PUT')]
     public function update(User $user, Request $req, UserManager $users, EntityManagerInterface $em): JsonResponse
     {
@@ -36,7 +42,7 @@ class UserController extends ApiController
         $self = $user === $this->getUser();
         $wasActiveAdmin = $user->isAdmin() && $user->isActive();
 
-        if (isset($d['name']) && trim($d['name']) !== '') $user->setName(trim($d['name']));
+        $users->updateProfile($user, array_intersect_key($d, array_flip(['name', 'email', 'phone'])));
         if (isset($d['roles'])) $user->setRoles((array) $d['roles']);
         if (isset($d['active'])) {
             if ($self && !$d['active']) throw new BadRequestHttpException('Vous ne pouvez pas désactiver votre propre compte');

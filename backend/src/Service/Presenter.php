@@ -8,12 +8,17 @@ final class Presenter
 {
     private const DATE = \DATE_ATOM;
 
-    public static function user(User $u): array
+    /** $self : ajoute les préférences (uniquement pour l'utilisateur connecté). */
+    public static function user(User $u, bool $self = false): array
     {
-        return [
-            'id' => $u->getId(), 'email' => $u->getEmail(), 'name' => $u->getName(),
+        $data = [
+            'id' => $u->getId(), 'email' => $u->getEmail(), 'name' => $u->getName(), 'phone' => $u->getPhone(),
+            'avatarColor' => $u->getAvatarColor(),
             'roles' => $u->getStoredRoles(), 'referent' => $u->isReferent(), 'admin' => $u->isAdmin(), 'active' => $u->isActive(),
+            'createdAt' => $u->getCreatedAt()?->format(self::DATE), 'lastLoginAt' => $u->getLastLoginAt()?->format(self::DATE),
         ];
+        if ($self) $data['preferences'] = $u->getPreferences();
+        return $data;
     }
 
     public static function lane(Lane $l): array

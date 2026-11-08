@@ -31,3 +31,26 @@ export const range = (fromYmd: string, days: number) => ({
   to: new Date(`${addDays(fromYmd, days)}T00:00:00`).toISOString(),
 })
 export const WEEKDAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
+
+/** « aujourd'hui à 10:24 », « hier à 18:02 », « il y a 3 jours », sinon la date. */
+export const relative = (iso: string | null) => {
+  if (!iso) return 'jamais'
+  const d = new Date(iso), now = new Date()
+  const days = Math.round((new Date(ymd(now)).getTime() - new Date(ymd(d)).getTime()) / 86400_000)
+  const t = d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' })
+  if (days === 0) return `aujourd'hui à ${t}`
+  if (days === 1) return `hier à ${t}`
+  if (days < 7) return `il y a ${days} jours`
+  return d.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })
+}
+
+/** Mot de passe aléatoire lisible (sans caractères ambigus : 0/O, 1/l/I). */
+export function generatePassword(length = 12) {
+  const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  const bytes = crypto.getRandomValues(new Uint32Array(length))
+  return Array.from(bytes, (b) => chars[b % chars.length]).join('')
+}
+
+/** Initiales (2 lettres) d'un nom : « Marie Dupont » -> « MD ». */
+export const initials = (name: string) =>
+  name.trim().split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]!.toUpperCase()).join('') || '?'

@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import ToastHost from './components/ToastHost.vue'
 import InstallDialog from './components/InstallDialog.vue'
+import UserAvatar from './components/UserAvatar.vue'
 import { useAuth } from './stores/auth'
 import { isStandalone, openInstall } from './pwa'
 
@@ -46,7 +47,7 @@ function logout() {
         </nav>
         <span class="spacer" />
         <router-link to="/account" class="me hide-mobile" :title="auth.user.email">
-          <span class="avatar">{{ auth.user.name.slice(0, 1).toUpperCase() }}</span>
+          <UserAvatar :name="auth.user.name" :color="auth.user.avatarColor" />
           <span>{{ auth.user.name }}<small>{{ auth.isAdmin ? 'Administrateur' : auth.isReferent ? 'Référent' : 'Encadrant' }}</small></span>
         </router-link>
         <button class="btn btn-ghost btn-icon hide-mobile" title="Déconnexion" @click="logout"><AppIcon name="logout" /></button>
@@ -60,7 +61,7 @@ function logout() {
     </nav>
     <div v-if="moreOpen" class="sheet-backdrop only-mobile" @click="moreOpen = false">
       <div class="sheet" @click.stop>
-        <div class="sheet-user"><span class="avatar">{{ auth.user.name.slice(0, 1).toUpperCase() }}</span>
+        <div class="sheet-user"><UserAvatar :name="auth.user.name" :color="auth.user.avatarColor" />
           <div><strong>{{ auth.user.name }}</strong><br /><small>{{ auth.user.email }}</small></div></div>
         <router-link v-for="n in nav.slice(4)" :key="n.to" :to="n.to" @click="moreOpen = false"><AppIcon :name="n.icon" />{{ n.label }}</router-link>
         <button v-if="!isStandalone" @click="moreOpen = false; openInstall()"><AppIcon name="download" />Installer l'application</button>
@@ -86,7 +87,6 @@ function logout() {
 .desktop-nav a.router-link-active { background: rgba(255,255,255,.18); color: #fff }
 .me { display: flex; align-items: center; gap: .55rem; color: #fff; text-decoration: none; line-height: 1.15 }
 .me small { display: block; color: #bcd9ef; font-size: .75rem }
-.avatar { width: 32px; height: 32px; border-radius: 50%; background: #fff; color: var(--primary); display: grid; place-items: center; font-weight: 700; flex: none }
 .app-header .btn-ghost { color: #d3e6f5 } .app-header .btn-ghost:hover { background: rgba(255,255,255,.12); color: #fff }
 .offline { display: flex; justify-content: center; align-items: center; gap: .4rem; background: var(--warn-50); color: #7a4e00; padding: .4rem; font-size: .9rem }
 
@@ -99,7 +99,6 @@ function logout() {
 .sheet { position: absolute; left: 0; right: 0; bottom: var(--tabbar-h); background: #fff; border-radius: 14px 14px 0 0; padding: .5rem 0 .75rem; box-shadow: 0 -6px 20px rgba(0,0,0,.12) }
 .sheet a, .sheet button { display: flex; align-items: center; gap: .75rem; padding: .85rem 1.25rem; color: var(--text); text-decoration: none; font: inherit; background: none; border: 0; width: 100%; cursor: pointer }
 .sheet-user { display: flex; gap: .75rem; align-items: center; padding: .75rem 1.25rem; border-bottom: 1px solid var(--line); margin-bottom: .25rem }
-.sheet-user .avatar { background: var(--primary); color: #fff }
 main.bare { padding-bottom: 2rem }
 @media (max-width: 760px) { .inner { gap: .5rem } }
 </style>

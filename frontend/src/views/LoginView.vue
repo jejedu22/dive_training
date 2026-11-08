@@ -30,7 +30,7 @@ async function submit() {
   loading.value = true
   try {
     await auth.login(email.value, password.value)
-    router.push('/occupation')
+    router.push('/') // page d'accueil choisie par l'utilisateur
   } catch (e) {
     if (e instanceof ApiError && e.fromApi && e.status === 401) {
       error.value = e.message === 'Compte désactivé.' ? 'Ce compte est désactivé.' : 'E-mail ou mot de passe incorrect.'

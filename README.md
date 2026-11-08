@@ -18,6 +18,10 @@ docker compose exec backend php bin/console app:user:create jean@club.fr "Jean" 
 docker compose exec backend php bin/console app:user:password jean@club.fr 'nouveaumotdepasse'
 ```
 
+**Mon compte** (clic sur son nom) : nom, e-mail (avec le mot de passe actuel), téléphone, couleur de l'avatar ; préférences enregistrées sur le compte (page d'accueil, vue du planning Jour/Mois, « seulement mes accès ») ; mes sections ; mot de passe ; installation et version de l'application.
+
+**Comptes** (administrateurs) : recherche et filtres, sections encadrées et dernière connexion de chacun, modification (nom, e-mail, téléphone, rôle), mot de passe généré automatiquement avec identifiants à copier, désactivation.
+
 **L'administrateur n'arrive pas à se connecter ?**
 ```
 docker compose logs backend | grep -i admin        # diagnostic affiché à chaque démarrage
