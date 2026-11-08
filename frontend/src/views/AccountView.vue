@@ -5,7 +5,7 @@ import AppIcon from '../components/AppIcon.vue'
 import { put } from '../api'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
-import { canInstall, install, isIos, isStandalone } from '../pwa'
+import { isStandalone, openInstall } from '../pwa'
 
 const auth = useAuth(), toast = useToast(), router = useRouter()
 const form = ref({ currentPassword: '', newPassword: '', confirm: '' })
@@ -43,9 +43,7 @@ function logout() {
       <div class="block">
         <h3>Application</h3>
         <p v-if="isStandalone" class="muted"><AppIcon name="check" :size="15" /> Installée sur cet appareil.</p>
-        <button v-else-if="canInstall" class="btn btn-secondary" @click="install"><AppIcon name="download" /> Installer l'application</button>
-        <p v-else-if="isIos" class="muted">Sur iPhone / iPad : ouvrez ce site dans Safari, touchez <strong>Partager</strong> puis <strong>« Sur l'écran d'accueil »</strong>.</p>
-        <p v-else class="muted">Utilisez le menu du navigateur : « Installer l'application » ou « Ajouter à l'écran d'accueil ».</p>
+        <button v-else class="btn btn-secondary" @click="openInstall"><AppIcon name="download" /> Installer l'application</button>
       </div>
       <button class="btn btn-secondary" style="margin-top:1rem" @click="logout"><AppIcon name="logout" /> Déconnexion</button>
     </section>

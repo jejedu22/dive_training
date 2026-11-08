@@ -3,6 +3,8 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ApiError, get } from '../api'
 import { useAuth } from '../stores/auth'
+import AppIcon from '../components/AppIcon.vue'
+import { isStandalone, openInstall } from '../pwa'
 import type { Health } from '../types'
 
 const email = ref(''), password = ref(''), error = ref(''), hints = ref<string[]>([]), loading = ref(false)
@@ -54,6 +56,7 @@ async function submit() {
       <button class="btn" :disabled="loading">{{ loading ? 'Connexion…' : 'Se connecter' }}</button>
     </form>
     <p class="muted foot">Pas de compte ? Demandez-le à un administrateur du club.</p>
+    <button v-if="!isStandalone" type="button" class="btn btn-secondary install" @click="openInstall"><AppIcon name="download" /> Installer l'application</button>
   </div>
 </template>
 
@@ -68,4 +71,5 @@ form .btn { width: 100%; margin-top: .25rem; min-height: 44px }
 .alert { margin: 0 }
 .hints { font-size: .85rem; color: #6a4800; background: var(--warn-50); border-radius: 8px; padding: .6rem .6rem .6rem 1.6rem; margin: 0 }
 .foot { text-align: center; font-size: .88rem }
+.install { display: flex; margin: .5rem auto 0 }
 </style>

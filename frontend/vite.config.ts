@@ -39,7 +39,8 @@ export default defineConfig({
         runtimeCaching: [{ urlPattern: /^\/api\//, handler: 'NetworkOnly' }],
         cleanupOutdatedCaches: true,
       },
-      devOptions: { enabled: false },
+      // Aussi en mode développement (docker-compose.override.yml), pour pouvoir installer l'app quel que soit le mode
+      devOptions: { enabled: true, navigateFallbackAllowlist: [/^\/$/] },
     }),
   ],
   server: { port: 5173, allowedHosts, proxy: { '/api': process.env.API_PROXY ?? 'http://localhost:8000' } },

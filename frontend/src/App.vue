@@ -3,8 +3,9 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from './components/AppIcon.vue'
 import ToastHost from './components/ToastHost.vue'
+import InstallDialog from './components/InstallDialog.vue'
 import { useAuth } from './stores/auth'
-import { canInstall, install, isIos, isStandalone } from './pwa'
+import { isStandalone, openInstall } from './pwa'
 
 const auth = useAuth()
 const router = useRouter()
@@ -27,7 +28,6 @@ const nav = computed(() => [
 const mobileMain = computed(() => nav.value.slice(0, 4))
 const moreOpen = ref(false)
 const moreActive = computed(() => !mobileMain.value.some((n) => route.path.startsWith(n.to)))
-const iosHint = ref(false)
 
 function logout() {
   auth.logout()
@@ -45,15 +45,13 @@ function logout() {
           <router-link v-for="n in nav" :key="n.to" :to="n.to"><AppIcon :name="n.icon" :size="17" />{{ n.label }}</router-link>
         </nav>
         <span class="spacer" />
-        <button v-if="canInstall && !isStandalone" class="btn btn-sm install" @click="install"><AppIcon name="download" :size="16" /> Installer</button>
-        <button v-else-if="isIos && !isStandalone" class="btn btn-sm install" @click="iosHint = !iosHint"><AppIcon name="download" :size="16" /> Installer</button>
+        <button v-if="!isStandalone" class="btn btn-sm install" title="Installer l'application sur cet appareil" @click="openInstall"><AppIcon name="download" :size="16" /> Installer</button>
         <router-link to="/account" class="me hide-mobile" :title="auth.user.email">
           <span class="avatar">{{ auth.user.name.slice(0, 1).toUpperCase() }}</span>
           <span>{{ auth.user.name }}<small>{{ auth.isAdmin ? 'Administrateur' : auth.isReferent ? 'Référent' : 'Encadrant' }}</small></span>
         </router-link>
         <button class="btn btn-ghost btn-icon hide-mobile" title="Déconnexion" @click="logout"><AppIcon name="logout" /></button>
       </div>
-      <div v-if="iosHint" class="ios-hint">Sur iPhone : touchez <strong>Partager</strong> puis <strong>« Sur l'écran d'accueil »</strong>.</div>
     </header>
     <div v-if="!online" class="offline"><AppIcon name="alert" :size="16" /> Hors ligne — les données ne peuvent pas être chargées.</div>
 
@@ -66,6 +64,7 @@ function logout() {
         <div class="sheet-user"><span class="avatar">{{ auth.user.name.slice(0, 1).toUpperCase() }}</span>
           <div><strong>{{ auth.user.name }}</strong><br /><small>{{ auth.user.email }}</small></div></div>
         <router-link v-for="n in nav.slice(4)" :key="n.to" :to="n.to" @click="moreOpen = false"><AppIcon :name="n.icon" />{{ n.label }}</router-link>
+        <button v-if="!isStandalone" @click="moreOpen = false; openInstall()"><AppIcon name="download" />Installer l'application</button>
         <router-link to="/account" @click="moreOpen = false"><AppIcon name="user" />Mon compte</router-link>
         <button @click="logout"><AppIcon name="logout" />Déconnexion</button>
       </div>
@@ -74,6 +73,7 @@ function logout() {
 
   <main :class="{ bare: !auth.user }"><router-view /></main>
   <ToastHost />
+  <InstallDialog />
 </template>
 
 <style scoped>
@@ -90,7 +90,6 @@ function logout() {
 .avatar { width: 32px; height: 32px; border-radius: 50%; background: #fff; color: var(--primary); display: grid; place-items: center; font-weight: 700; flex: none }
 .app-header .btn-ghost { color: #d3e6f5 } .app-header .btn-ghost:hover { background: rgba(255,255,255,.12); color: #fff }
 .install { background: #fff; color: var(--primary) } .install:hover { background: var(--primary-50) }
-.ios-hint { background: #fff; color: var(--text); padding: .6rem 1rem; text-align: center; font-size: .9rem }
 .offline { display: flex; justify-content: center; align-items: center; gap: .4rem; background: var(--warn-50); color: #7a4e00; padding: .4rem; font-size: .9rem }
 
 .tabbar { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; height: var(--tabbar-h); padding-bottom: env(safe-area-inset-bottom);

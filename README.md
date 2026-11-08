@@ -33,7 +33,7 @@ Page **Planning** : uniquement les créneaux du club du jour (une frise par cré
 Page **Lignes d'eau** (accueil) : semaine par semaine, chaque créneau avec ses lignes ouvertes, la section attribuée, les séances réservées, et un résumé **« Mes accès »** pour les sections que l'on encadre (on s'ajoute comme encadrant dans **Sections**). Bouton « Réserver » qui préremplit la séance.
 
 ## Application mobile (PWA)
-L'application est une PWA : installable sur téléphone et ordinateur (bouton **Installer** dans l'en-tête ou dans « Mon compte » ; sur iPhone : Safari → Partager → « Sur l'écran d'accueil »), interface adaptée au mobile avec barre d'onglets, fonctionne hors ligne pour l'affichage (les données nécessitent le réseau). Installation possible uniquement en HTTPS et avec le front de production (`docker compose -f docker-compose.yml …`).
+L'application est une PWA : installable sur téléphone et ordinateur. Le bouton **Installer** (en-tête, page de connexion, menu « Plus » sur mobile, « Mon compte ») ouvre l'invite du navigateur quand elle existe (Chrome, Edge, Android), sinon une fenêtre explique la marche à suivre (iPhone : Safari → Partager → « Sur l'écran d'accueil »), interface adaptée au mobile avec barre d'onglets, fonctionne hors ligne pour l'affichage (les données nécessitent le réseau). Installation possible uniquement en HTTPS (mode production ou développement).
 
 ## Lancer (Docker + Traefik)
 ```
