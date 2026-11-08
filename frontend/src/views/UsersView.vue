@@ -80,7 +80,7 @@ function resetPassword(u: User) {
             </select>
           </td>
           <td><div class="row" style="justify-content:flex-end">
-            <button class="btn btn-secondary btn-sm" title="Réinitialiser le mot de passe" @click="resetPassword(u)"><AppIcon name="lock" :size="15" /><span class="hide-mobile">Mot de passe</span></button>
+            <button class="btn btn-secondary btn-sm" title="Réinitialiser le mot de passe" @click="resetPassword(u)"><AppIcon name="lock" :size="15" /> Mot de passe</button>
             <button v-if="u.id !== auth.user?.id" class="btn btn-sm" :class="u.active ? 'btn-danger' : 'btn-ok'" @click="toggle(u)">{{ u.active ? 'Désactiver' : 'Réactiver' }}</button>
           </div></td>
         </tr>
@@ -91,4 +91,14 @@ function resetPassword(u: User) {
 
 <style scoped>
 tr.off td { opacity: .55 }
+/* Mobile : une carte par compte au lieu d'un tableau qui déborde */
+@media (max-width: 760px) {
+  table, tbody, tr, td { display: block; width: 100% }
+  tr:has(th) { display: none }
+  tr { padding: .7rem 0; border-bottom: 1px solid var(--line) }
+  tr:last-child { border-bottom: 0 }
+  td { border: 0; padding: .2rem 0 }
+  td select { width: 100% }
+  td .row { justify-content: flex-start !important }
+}
 </style>

@@ -22,7 +22,8 @@ const host = location.host
       <div v-if="checks && !checks.https" class="alert alert-ko"><AppIcon name="alert" />
         <span>L'installation exige une connexion sécurisée (<strong>https://</strong>). Ouvrez l'application via son adresse HTTPS.</span></div>
       <div v-else-if="checks && (!checks.manifest || !checks.serviceWorker)" class="alert alert-warn"><AppIcon name="alert" />
-        <span>Le navigateur ne propose pas encore l'installation (service worker {{ checks.serviceWorker ? 'actif' : 'pas encore actif' }}). Rechargez la page une fois, puis réessayez.</span></div>
+        <span v-if="!checks.serviceWorker">Le service worker n'est pas actif. Si le cadenas de la barre d'adresse est barré ou rouge, le <strong>certificat HTTPS</strong> n'est pas valide pour cet appareil : l'installation est alors impossible. Sinon, rechargez la page une fois puis réessayez.</span>
+        <span v-else>Le navigateur ne propose pas encore l'installation. Rechargez la page une fois, puis réessayez.</span></div>
 
       <ol v-if="platform === 'ios'" class="steps">
         <li>Ouvrez <strong>{{ host }}</strong> dans <strong>Safari</strong> (pas dans Chrome ni dans une autre app).</li>
