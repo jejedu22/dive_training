@@ -10,6 +10,9 @@ services:
       DOMAIN: ${DOMAIN}
       # filet de sécurité : si une requête /api arrive quand même au serveur Vite, il la relaie au backend
       API_PROXY: http://backend:80
+    # Le volume node_modules survit aux reconstructions de l'image : on resynchronise les
+    # dépendances à chaque démarrage (sinon un paquet ajouté à package.json manque et Vite plante).
+    command: sh -c "npm install --no-audit --no-fund && npm run dev -- --host"
     volumes: ["./frontend:/app", "/app/node_modules"]
     labels:
       traefik.http.services.dive-front.loadbalancer.server.port: "5173"

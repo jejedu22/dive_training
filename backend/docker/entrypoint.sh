@@ -11,6 +11,11 @@ if [ ! -f config/jwt/private.pem ]; then
   chgrp www-data config/jwt/*.pem
 fi
 
+# En dev, vendor/ est un volume qui survit aux reconstructions : on resynchronise les dépendances
+if [ "${APP_ENV}" = "dev" ] && [ -f composer.lock ]; then
+  composer install --no-interaction --no-scripts --no-progress
+fi
+
 mkdir -p var && chown -R www-data:www-data var
 # La base peut mettre quelques secondes à accepter les connexions
 for i in $(seq 1 30); do
