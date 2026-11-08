@@ -30,6 +30,7 @@ class CalendarController extends ApiController
                 'id' => (string) $r->getId(), 'resourceId' => (string) $r->getLane()->getId(),
                 'title' => $x['title'] . ' — ' . $x['section'], 'start' => $x['start'], 'end' => $x['end'],
                 'status' => $r->getStatus(), 'sessionId' => $x['sessionId'],
+                'sectionId' => $r->getSession()->getSection()->getId(), 'section' => $x['section'], 'color' => $x['color'],
             ];
         }, $qb->getQuery()->getResult());
 

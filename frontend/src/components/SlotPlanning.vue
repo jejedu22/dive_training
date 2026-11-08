@@ -2,6 +2,7 @@
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 import { time } from '../format'
+import { chipStyle, eventStyle, tint } from '../colors'
 import type { CalendarData, SlotOccurrence } from '../types'
 
 /**
@@ -32,7 +33,7 @@ function pools(o: SlotOccurrence) {
   }
   return [...groups.entries()].map(([pool, lanes]) => ({ pool, lanes }))
 }
-const allocation = (o: SlotOccurrence, laneId: string) => o.allocations.find((a) => a.laneId === Number(laneId))?.section ?? null
+const allocation = (o: SlotOccurrence, laneId: string) => o.allocations.find((a) => a.laneId === Number(laneId)) ?? null
 const eventsIn = (o: SlotOccurrence, laneId: string) => props.data.events.filter((e) => e.resourceId === laneId && ms(e.start) < ms(o.end) && ms(e.end) > ms(o.start))
 
 /** Graduations toutes les 30 minutes. */
@@ -69,15 +70,16 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
           <div class="row-tl head"><div class="lab" /><div class="cells"><span v-for="t in ticks(o)" :key="t">{{ t }}</span></div></div>
           <template v-for="g in pools(o)" :key="g.pool">
             <div class="pool"><span>{{ g.pool }}</span></div>
-            <div v-for="r in g.lanes" :key="r.id" class="row-tl lane" :class="{ allocated: allocation(o, r.id) }">
+            <div v-for="r in g.lanes" :key="r.id" class="row-tl lane" :class="{ allocated: allocation(o, r.id) }"
+              :style="allocation(o, r.id) ? { '--lane-tint': tint(allocation(o, r.id)!.color, 0.08) } : {}">
               <div class="lab">
                 <span>{{ r.title }}</span>
-                <span v-if="allocation(o, r.id)" class="chip chip-ok sec">{{ allocation(o, r.id) }}</span>
-                <span v-else class="chip chip-primary sec">libre</span>
+                <span v-if="allocation(o, r.id)" class="chip sec" :style="chipStyle(allocation(o, r.id)!.color)">{{ allocation(o, r.id)!.section }}</span>
+                <span v-else class="chip chip-free sec">libre</span>
               </div>
               <div class="cells" :style="{ backgroundSize: `${100 / ticks(o).length}% 100%` }">
                 <div v-if="nowLeft(o)" class="now" :style="{ left: nowLeft(o)! }" />
-                <button v-for="e in eventsIn(o, r.id)" :key="e.id" class="ev" :class="e.status" :style="style(o, e)" :title="`${e.title} (${statusText(e.status)})`" @click="emit('open', e.sessionId)">
+                <button v-for="e in eventsIn(o, r.id)" :key="e.id" class="ev" :style="{ ...style(o, e), ...eventStyle(e.color, e.status) }" :title="`${e.title} · ${e.section} (${statusText(e.status)})`" @click="emit('open', e.sessionId)">
                   {{ e.title }}
                 </button>
               </div>
@@ -91,6 +93,7 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
       <div class="card-head"><h2><AppIcon name="alert" :size="17" /> Séances exceptionnelles hors créneau</h2></div>
       <button v-for="e in exceptional" :key="e.id" class="exc-row" @click="emit('open', e.sessionId)">
         <strong>{{ time(e.start) }}–{{ time(e.end) }}</strong>
+        <span class="chip" :style="chipStyle(e.color)">{{ e.section }}</span>
         <span>{{ e.title }}</span>
         <span class="muted">{{ laneLabel(e.resourceId) }}</span>
         <span class="chip" :class="e.status">{{ statusText(e.status) }}</span>
@@ -114,11 +117,10 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
 .pool { background: var(--primary-50); color: var(--primary-600); padding: .28rem .6rem; font-weight: 600; font-size: .82rem; border-top: 1px solid var(--line) }
 .pool span { position: sticky; left: .6rem }
 .lane { border-top: 1px solid var(--line) }
-.lane.allocated .cells { background-color: rgba(29,143,78,.05) }
+.lane.allocated .cells { background-color: var(--lane-tint) }
 .now { position: absolute; top: 0; bottom: 0; width: 2px; background: var(--ko); opacity: .6; z-index: 1 }
 .ev { position: absolute; top: 5px; bottom: 5px; z-index: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; font-size: .78rem; font-weight: 600;
   padding: 0 .45rem; border-radius: 6px; border: 0; color: #fff; cursor: pointer; text-align: left }
-.ev.PENDING { background: #d38a00 } .ev.CONFIRMED { background: var(--ok) }
 .exc { border-left: 4px solid var(--warn) }
 .exc h2 { color: #7a4e00 }
 .exc-row { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; width: 100%; padding: .55rem .25rem; border: 0; border-bottom: 1px solid var(--line);

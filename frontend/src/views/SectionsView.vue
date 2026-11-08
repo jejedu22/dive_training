@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
-import { del, get, post } from '../api'
+import { del, get, post, put } from '../api'
+import { PALETTE } from '../colors'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import type { Diver, Instructor, Section } from '../types'
@@ -47,6 +48,7 @@ const attach = (s: Section) => pickDiver.value[s.id] && run(() => post(`/section
 const detach = (s: Section, d: Diver) => run(() => del(`/sections/${s.id}/divers/${d.id}`), `${d.firstName} retiré(e) de la section.`)
 const addInstructor = (s: Section) => pickInstructor.value[s.id] && run(() => post(`/sections/${s.id}/instructors`, { userId: pickInstructor.value[s.id] }).then(() => (pickInstructor.value[s.id] = undefined)), 'Encadrant ajouté.')
 const removeInstructor = (s: Section, id: number) => run(() => del(`/sections/${s.id}/instructors/${id}`), 'Encadrant retiré.')
+const setColor = (s: Section, color: string) => color !== s.color && run(() => put(`/sections/${s.id}`, { color }), `Couleur de ${s.name} modifiée.`)
 const joinSection = (s: Section) => run(() => post(`/sections/${s.id}/instructors`, { userId: auth.user!.id }), `Vous encadrez maintenant ${s.name}.`)
 
 function diverForm(s: Section) {
@@ -79,10 +81,10 @@ const createDiver = (s: Section) => run(async () => {
   <div v-if="!sections.length && !showNew" class="card empty"><strong>Aucune section</strong>Créez votre première section de formation.</div>
 
   <div class="stack">
-    <article v-for="s in sorted" :key="s.id" class="card" :class="{ mine: isMine(s) }">
+    <article v-for="s in sorted" :key="s.id" class="card" :style="{ borderLeftColor: s.color }">
       <div class="card-head">
         <div>
-          <h2>{{ s.name }} <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
+          <h2><span class="swatch" :style="{ background: s.color }" />{{ s.name }} <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
           <p>{{ [s.targetLevel, s.season].filter(Boolean).join(' · ') || '—' }} · {{ s.divers.length }} élève{{ s.divers.length > 1 ? 's' : '' }}</p>
         </div>
         <div class="row">
@@ -99,6 +101,13 @@ const createDiver = (s: Section) => run(async () => {
       </div>
 
       <template v-if="open[s.id]">
+        <div class="row colors">
+          <span class="muted" style="font-size:.88rem">Couleur sur le planning :</span>
+          <button v-for="c in PALETTE" :key="c" class="color" :class="{ on: c === s.color }" :style="{ background: c }" :title="c" @click="setColor(s, c)" />
+          <label class="color custom" :class="{ on: !PALETTE.includes(s.color) }" :style="{ background: PALETTE.includes(s.color) ? '#fff' : s.color }" title="Autre couleur">
+            <input type="color" :value="s.color" @change="setColor(s, ($event.target as HTMLInputElement).value)" />+
+          </label>
+        </div>
         <div class="row" style="margin-top:.6rem">
           <select v-model.number="pickInstructor[s.id]">
             <option :value="undefined">Ajouter un encadrant…</option>
@@ -135,7 +144,13 @@ const createDiver = (s: Section) => run(async () => {
 </template>
 
 <style scoped>
-.card.mine { border-left: 4px solid var(--ok) }
+.card { border-left: 5px solid var(--line) }
+.swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex: none }
+.colors { margin-bottom: .6rem; gap: .35rem }
+.color { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; position: relative }
+.color.on { box-shadow: 0 0 0 2px var(--text) }
+.color.custom { display: grid; place-items: center; font-weight: 700; color: var(--muted); overflow: hidden }
+.color.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; min-height: 0; padding: 0; border: 0 }
 .card-head h2 { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap }
 .sub { margin: 1rem 0 .4rem; font-size: .88rem; color: var(--muted) }
 .divers { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .25rem .75rem }

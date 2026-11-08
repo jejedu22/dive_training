@@ -211,7 +211,7 @@ async function create() {
                 <span class="muted">{{ o.label }}</span>
                 <span class="row counts">
                   <span v-if="counts(o).mine" class="chip chip-ok">{{ counts(o).mine }} attribuée{{ counts(o).mine > 1 ? 's' : '' }}</span>
-                  <span v-if="counts(o).free" class="chip chip-primary">{{ counts(o).free }} libre{{ counts(o).free > 1 ? 's' : '' }}</span>
+                  <span v-if="counts(o).free" class="chip chip-free">{{ counts(o).free }} libre{{ counts(o).free > 1 ? 's' : '' }}</span>
                 </span>
               </label>
             </div>
@@ -245,7 +245,7 @@ async function create() {
           <span class="pool-name">{{ g.pool }}</span>
           <label v-for="l in g.lanes" :key="l.laneId" class="toggle" :class="{ on: laneIds.includes(l.laneId), off: !usable(l) }" :title="laneState(l).text">
             <input v-model="laneIds" type="checkbox" :value="l.laneId" :disabled="!usable(l)" />{{ l.lane }}
-            <span class="chip hint" :class="{ 'chip-ok': laneState(l).state === 'mine', 'chip-primary': laneState(l).state === 'free', 'chip-warn': laneState(l).state === 'pending' }">{{ laneState(l).text }}</span>
+            <span class="chip hint" :class="{ 'chip-ok': laneState(l).state === 'mine', 'chip-free': laneState(l).state === 'free', 'chip-warn': laneState(l).state === 'pending' }">{{ laneState(l).text }}</span>
           </label>
         </div>
         <p class="muted note">Lignes attribuées : confirmées directement. Lignes libres : validées par un référent.</p>

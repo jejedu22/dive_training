@@ -125,7 +125,7 @@ class LaneOccupancyTest extends WebTestCase
         $lanes = $occ['occurrences'][0]['lanes'];
         $this->assertSame(['L1', 'L2', 'L3'], array_column($lanes, 'lane'), 'seulement les lignes ouvertes');
 
-        $this->assertSame(['sectionId' => $this->n1, 'section' => 'N1', 'mine' => true], $lanes[0]['allocation']);
+        $this->assertSame(['sectionId' => $this->n1, 'section' => 'N1', 'color' => '#1f6fb5', 'mine' => true], $lanes[0]['allocation']);
         $this->assertSame('CONFIRMED', $lanes[0]['reservations'][0]['status']);
         $this->assertNull($lanes[1]['allocation']);
         $this->assertSame('PENDING', $lanes[1]['reservations'][0]['status']);
@@ -147,5 +147,27 @@ class LaneOccupancyTest extends WebTestCase
         $this->assertEqualsCanonicalizing([$this->n1, $this->n2], $occ['mySectionIds']);
         [, $s] = $this->call('DELETE', "/api/sections/{$this->n1}/instructors/$inst2Id", null, $this->inst);
         $this->assertCount(1, $s['instructors']);
+    }
+
+    public function testSectionColors(): void
+    {
+        // couleurs distinctes attribuées automatiquement (N1 et N2 créées dans setUp)
+        [, $sections] = $this->call('GET', '/api/sections', null, $this->inst);
+        $this->assertSame(['#1f6fb5', '#c0392b'], array_column($sections, 'color'));
+        [, $n3] = $this->call('POST', '/api/sections', ['name' => 'N3'], $this->inst);
+        $this->assertSame('#1e8449', $n3['color']);
+
+        $this->assertSame(400, $this->call('PUT', "/api/sections/{$this->n1}", ['color' => 'rouge'], $this->inst)[0]);
+        [$code, $s] = $this->call('PUT', "/api/sections/{$this->n1}", ['color' => '#FF8800'], $this->inst);
+        $this->assertSame([200, '#ff8800'], [$code, $s['color']]);
+
+        // la couleur suit la section sur le planning et dans l'occupation
+        $this->allocate([$this->lanes[0] => $this->n1]);
+        $this->book($this->n1, $this->lanes[0], $this->inst);
+        [, $cal] = $this->call('GET', '/api/calendar?from=2026-12-07T00:00:00Z&to=2026-12-08T00:00:00Z', null, $this->inst);
+        $this->assertSame('#ff8800', $cal['events'][0]['color']);
+        $this->assertSame('#ff8800', $cal['slots'][0]['allocations'][0]['color']);
+        [, $occ] = $this->call('GET', '/api/occupancy?from=2026-12-07T00:00:00Z&to=2026-12-08T00:00:00Z', null, $this->inst);
+        $this->assertSame('#ff8800', $occ['occurrences'][0]['lanes'][0]['reservations'][0]['color']);
     }
 }

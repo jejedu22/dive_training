@@ -6,6 +6,7 @@ import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { WEEKDAYS, dateFr } from '../format'
 import type { ClubSlot, Pool, Section } from '../types'
+import { chipStyle, tint } from '../colors'
 
 const auth = useAuth(), toast = useToast()
 const slots = ref<ClubSlot[]>([])
@@ -105,6 +106,7 @@ const planDirty = (s: ClubSlot) => {
 /** Lignes ouvertes d'un créneau regroupées par bassin (pour l'affichage). */
 const lanesByPool = (s: ClubSlot) =>
   pools.value.map((p) => ({ pool: p, lanes: p.lanes.filter((l) => s.availableLaneIds.includes(l.id)) })).filter((g) => g.lanes.length)
+const sectionColor = (id: number | undefined) => sections.value.find((x) => x.id === id)?.color
 const validity = (s: ClubSlot) =>
   s.validFrom || s.validUntil ? [s.validFrom && `du ${dateFr(s.validFrom)}`, s.validUntil && `au ${dateFr(s.validUntil)}`].filter(Boolean).join(' ') : 'Toute l\'année'
 </script>
@@ -187,12 +189,13 @@ const validity = (s: ClubSlot) =>
           <div class="plan-pool">{{ g.pool.name }}</div>
           <div v-for="l in g.lanes" :key="l.id" class="plan-row">
             <span>{{ l.name }}</span>
-            <select v-if="auth.isReferent && plans[s.id]" v-model.number="plans[s.id][l.id]" :class="{ set: plans[s.id][l.id] }">
+            <select v-if="auth.isReferent && plans[s.id]" v-model.number="plans[s.id][l.id]" :class="{ set: plans[s.id][l.id] }"
+              :style="sectionColor(plans[s.id][l.id]) ? { borderColor: sectionColor(plans[s.id][l.id]), background: tint(sectionColor(plans[s.id][l.id])!, 0.1), color: sectionColor(plans[s.id][l.id]) } : {}">
               <option :value="undefined">Libre (sur demande)</option>
               <option v-for="sec in sections" :key="sec.id" :value="sec.id">{{ sec.name }}</option>
             </select>
-            <span v-else-if="s.allocations.find((a) => a.laneId === l.id)" class="chip chip-ok">{{ s.allocations.find((a) => a.laneId === l.id)!.section }}</span>
-            <span v-else class="chip chip-primary">Libre</span>
+            <span v-else-if="s.allocations.find((a) => a.laneId === l.id)" class="chip" :style="chipStyle(s.allocations.find((a) => a.laneId === l.id)!.color)">{{ s.allocations.find((a) => a.laneId === l.id)!.section }}</span>
+            <span v-else class="chip chip-free">Libre</span>
           </div>
         </template>
       </div>
@@ -219,5 +222,5 @@ const validity = (s: ClubSlot) =>
 .plan-pool { grid-column: 1 / -1; font-size: .78rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-top: .35rem }
 .plan-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem 0; border-bottom: 1px dashed var(--line) }
 .plan-row select { min-width: 150px }
-.plan-row select.set { border-color: #9fd5b3; background: #f3fbf6; color: var(--ok); font-weight: 600 }
+.plan-row select.set { font-weight: 600 }
 </style>

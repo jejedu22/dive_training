@@ -9,6 +9,7 @@ import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { addDays, dateTime, dayLong, range, time, today, ymd } from '../format'
 import type { CalendarData, Pool, Reservation, Section, SlotOccurrence } from '../types'
+import { chipStyle } from '../colors'
 
 const auth = useAuth(), toast = useToast(), router = useRouter(), route = useRoute()
 const day = ref(typeof route.query.date === 'string' ? route.query.date : today())
@@ -62,6 +63,14 @@ async function jump(dir: 1 | -1, fromToday = false) {
   }
 }
 
+/** Sections visibles ce jour-là (séances et lignes attribuées), pour la légende des couleurs. */
+const daySections = computed(() => {
+  const m = new Map<number, { id: number; name: string; color: string }>()
+  for (const e of data.value.events) m.set(e.sectionId, { id: e.sectionId, name: e.section, color: e.color })
+  for (const o of data.value.slots ?? []) for (const a of o.allocations) m.set(a.sectionId, { id: a.sectionId, name: a.section, color: a.color })
+  return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
+})
+
 async function decide(r: Reservation, action: 'confirm' | 'reject') {
   try {
     await post(`/reservations/${r.id}/${action}`)
@@ -89,9 +98,9 @@ async function decide(r: Reservation, action: 'confirm' | 'reject') {
   </div>
 
   <SlotPlanning :data="data" @open="(id) => router.push(`/sessions/${id}`)" />
-  <p class="legend muted">
-    <span class="sw confirmed" /> confirmée <span class="sw pending" /> en attente
-    <span class="sw alloc" /> ligne attribuée à une section
+  <p v-if="daySections.length" class="legend">
+    <span v-for="sec in daySections" :key="sec.id" class="chip" :style="chipStyle(sec.color)"><span class="dot" :style="{ background: sec.color }" />{{ sec.name }}</span>
+    <span class="muted">· plein = confirmée · <span class="sw striped" /> rayé = en attente de validation</span>
   </p>
 
   <section v-if="auth.isReferent && pending.length" class="card" style="margin-top:1rem">
@@ -100,7 +109,7 @@ async function decide(r: Reservation, action: 'confirm' | 'reject') {
       <table>
         <tr><th>Séance</th><th>Ligne</th><th>Quand</th><th class="hide-mobile">Demandé par</th><th /></tr>
         <tr v-for="r in pending" :key="r.id">
-          <td><router-link :to="`/sessions/${r.sessionId}`">{{ r.title }}</router-link><br /><small>{{ r.section }}</small></td>
+          <td><router-link :to="`/sessions/${r.sessionId}`">{{ r.title }}</router-link><br /><span class="chip" :style="chipStyle(r.color)">{{ r.section }}</span></td>
           <td>{{ r.pool }} · {{ r.lane.name }}</td>
           <td>{{ dateTime(r.start) }}–{{ time(r.end) }}</td>
           <td class="hide-mobile">{{ r.requestedBy }}</td>
@@ -120,6 +129,6 @@ async function decide(r: Reservation, action: 'confirm' | 'reject') {
 .cap::first-letter { text-transform: uppercase }
 .legend { font-size: .82rem; margin: .5rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem }
 .sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px }
-.sw.confirmed { background: var(--ok) } .sw.pending { background: #d38a00 }
-.sw.alloc { background: rgba(29,143,78,.2); border: 1px solid rgba(29,143,78,.5) }
+.sw.striped { background: repeating-linear-gradient(135deg, #5d6d7e 0 4px, rgba(93,109,126,.5) 4px 8px); vertical-align: -1px }
+.dot { width: 9px; height: 9px; border-radius: 50%; display: inline-block }
 </style>

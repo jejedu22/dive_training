@@ -5,6 +5,7 @@ use App\Entity\{Diver, Section, User};
 use App\Service\Presenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 
 #[Route('/api/sections')]
@@ -24,7 +25,8 @@ class SectionController extends ApiController
     {
         $d = $this->body($req);
         $this->required($d, 'name');
-        $s = (new Section())->setName($d['name'])->setTargetLevel($d['targetLevel'] ?? null)->setSeason($d['season'] ?? null);
+        $s = (new Section())->setName($d['name'])->setTargetLevel($d['targetLevel'] ?? null)->setSeason($d['season'] ?? null)
+            ->setColor(isset($d['color']) ? $this->color($d['color']) : $this->nextColor($em));
         $s->addInstructor($this->getUser());
         $em->persist($s);
         $em->flush();
@@ -38,6 +40,7 @@ class SectionController extends ApiController
         isset($d['name']) && $s->setName($d['name']);
         array_key_exists('targetLevel', $d) && $s->setTargetLevel($d['targetLevel']);
         array_key_exists('season', $d) && $s->setSeason($d['season']);
+        isset($d['color']) && $s->setColor($this->color($d['color']));
         $em->flush();
         return $this->json(Presenter::section($s));
     }
@@ -80,5 +83,20 @@ class SectionController extends ApiController
         $s->removeDiver($diver);
         $em->flush();
         return $this->json(Presenter::section($s));
+    }
+
+    private function color(mixed $c): string
+    {
+        if (!is_string($c) || !preg_match('/^#[0-9a-fA-F]{6}$/', $c)) throw new BadRequestHttpException('Couleur invalide (format #rrggbb)');
+        return $c;
+    }
+
+    /** Première couleur de la palette la moins utilisée par les sections existantes. */
+    private function nextColor(EntityManagerInterface $em): string
+    {
+        $used = array_count_values(array_map(fn (Section $x) => $x->getColor(), $em->getRepository(Section::class)->findAll()));
+        $best = Section::PALETTE[0];
+        foreach (Section::PALETTE as $c) if (($used[$c] ?? 0) < ($used[$best] ?? 0)) $best = $c;
+        return $best;
     }
 }

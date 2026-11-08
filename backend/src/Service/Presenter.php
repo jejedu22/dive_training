@@ -34,7 +34,7 @@ final class Presenter
     public static function section(Section $s): array
     {
         return [
-            'id' => $s->getId(), 'name' => $s->getName(), 'targetLevel' => $s->getTargetLevel(), 'season' => $s->getSeason(),
+            'id' => $s->getId(), 'name' => $s->getName(), 'targetLevel' => $s->getTargetLevel(), 'season' => $s->getSeason(), 'color' => $s->getColor(),
             'instructors' => array_map([self::class, 'user'], $s->getInstructors()->getValues()),
             'divers' => array_map([self::class, 'diver'], $s->getDivers()->getValues()),
         ];
@@ -44,7 +44,7 @@ final class Presenter
     {
         return [
             'id' => $r->getId(), 'sessionId' => $r->getSession()?->getId(), 'title' => $r->getSession()?->getTitle(),
-            'section' => $r->getSession()?->getSection()?->getName(),
+            'section' => $r->getSession()?->getSection()?->getName(), 'color' => $r->getSession()?->getSection()?->getColor(),
             'lane' => self::lane($r->getLane()), 'pool' => $r->getLane()->getPool()?->getName(),
             'start' => $r->getStartAt()->format(self::DATE), 'end' => $r->getEndAt()->format(self::DATE),
             'status' => $r->getStatus(), 'requestedBy' => $r->getRequestedBy()?->getName(), 'validatedBy' => $r->getValidatedBy()?->getName(),
@@ -61,7 +61,7 @@ final class Presenter
     public static function session(DiveSession $s, bool $detail = true): array
     {
         $data = [
-            'id' => $s->getId(), 'title' => $s->getTitle(), 'sectionId' => $s->getSection()?->getId(), 'section' => $s->getSection()?->getName(),
+            'id' => $s->getId(), 'title' => $s->getTitle(), 'sectionId' => $s->getSection()?->getId(), 'section' => $s->getSection()?->getName(), 'color' => $s->getSection()?->getColor(),
             'start' => $s->getStartAt()->format(self::DATE), 'end' => $s->getEndAt()->format(self::DATE),
             'reservations' => array_map([self::class, 'reservation'], $s->getReservations()->getValues()),
         ];
@@ -85,7 +85,7 @@ final class Presenter
             'laneIds' => array_map(fn (Lane $l) => $l->getId(), $s->getLanes()->getValues()),
             'availableLaneIds' => array_map(fn (Lane $l) => $l->getId(), $lanes),
             'allocations' => array_map(fn ($a) => [
-                'laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName(),
+                'laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName(), 'color' => $a->getSection()->getColor(),
             ], $s->getAllocations()->getValues()),
         ];
     }
@@ -98,7 +98,7 @@ final class Presenter
             'poolId' => $o['slot']->getPool()?->getId(), 'pool' => $o['slot']->getPool()?->getName(),
             'start' => $o['start']->format(self::DATE), 'end' => $o['end']->format(self::DATE),
             'laneIds' => array_map(fn (Lane $l) => $l->getId(), $o['lanes']),
-            'allocations' => array_map(fn ($a) => ['laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName()], $o['slot']->getAllocations()->getValues()),
+            'allocations' => array_map(fn ($a) => ['laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName(), 'color' => $a->getSection()->getColor()], $o['slot']->getAllocations()->getValues()),
         ];
     }
 }

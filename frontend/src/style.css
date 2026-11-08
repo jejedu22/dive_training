@@ -82,3 +82,6 @@ tr:last-child td { border-bottom: 0 }
   .hide-mobile { display: none !important }
 }
 @media (min-width: 761px) { .only-mobile { display: none !important } }
+
+/* Ligne libre : neutre, pour ne pas se confondre avec une couleur de section */
+.chip-free { background: #fff; color: var(--muted); box-shadow: inset 0 0 0 1px #c3ccd5; border: 0; outline: 1px dashed #c3ccd5; outline-offset: -1px }

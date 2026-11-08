@@ -42,10 +42,10 @@ class OccupancyController extends ApiController
                     $r->getLane()->getId() === $lane->getId() && $r->getStartAt() < $o['end'] && $r->getEndAt() > $o['start']));
                 $lanes[] = [
                     'laneId' => $lane->getId(), 'lane' => $lane->getName(), 'poolId' => $lane->getPool()->getId(), 'pool' => $lane->getPool()->getName(),
-                    'allocation' => $alloc ? ['sectionId' => $alloc->getSection()->getId(), 'section' => $alloc->getSection()->getName(), 'mine' => in_array($alloc->getSection()->getId(), $mine, true)] : null,
+                    'allocation' => $alloc ? ['sectionId' => $alloc->getSection()->getId(), 'section' => $alloc->getSection()->getName(), 'color' => $alloc->getSection()->getColor(), 'mine' => in_array($alloc->getSection()->getId(), $mine, true)] : null,
                     'reservations' => array_map(fn (Reservation $r) => [
                         'id' => $r->getId(), 'sessionId' => $r->getSession()->getId(), 'title' => $r->getSession()->getTitle(),
-                        'sectionId' => $r->getSession()->getSection()->getId(), 'section' => $r->getSession()->getSection()->getName(),
+                        'sectionId' => $r->getSession()->getSection()->getId(), 'section' => $r->getSession()->getSection()->getName(), 'color' => $r->getSession()->getSection()->getColor(),
                         'status' => $r->getStatus(), 'start' => $r->getStartAt()->format(\DATE_ATOM), 'end' => $r->getEndAt()->format(\DATE_ATOM),
                         'mine' => in_array($r->getSession()->getSection()->getId(), $mine, true),
                     ], $res),

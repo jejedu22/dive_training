@@ -7,6 +7,7 @@ import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { dayLong, time } from '../format'
 import type { DiveSession, Reservation } from '../types'
+import { chipStyle } from '../colors'
 
 const props = defineProps<{ id: string }>()
 const auth = useAuth(), toast = useToast(), router = useRouter()
@@ -61,7 +62,7 @@ const date = computed(() => session.value?.start.slice(0, 10))
       <div>
         <router-link :to="{ path: '/planning', query: { date } }" class="back"><AppIcon name="left" :size="16" /> Planning</router-link>
         <h1>{{ session.title }}</h1>
-        <p class="cap">{{ session.section }} · {{ dayLong(session.start) }} · {{ time(session.start) }}–{{ time(session.end) }}</p>
+        <p class="cap"><span class="chip" :style="chipStyle(session.color)">{{ session.section }}</span> {{ dayLong(session.start) }} · {{ time(session.start) }}–{{ time(session.end) }}</p>
       </div>
       <button class="btn btn-danger" @click="remove"><AppIcon name="trash" :size="16" /> Supprimer</button>
     </div>
@@ -102,7 +103,7 @@ const date = computed(() => session.value?.start.slice(0, 10))
 
 <style scoped>
 .back { display: inline-flex; align-items: center; gap: .2rem; font-size: .88rem; text-decoration: none; margin-bottom: .3rem }
-.cap::first-letter { text-transform: uppercase }
+
 .res { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .55rem 0; border-bottom: 1px solid var(--line) }
 .res:last-child { border-bottom: 0 }
 .big { font-size: 1.3rem; color: var(--primary) }

@@ -7,6 +7,7 @@ import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { addDays, dayLong, dayShort, mondayOf, range, time, today, ymd } from '../format'
 import type { Occupancy, Occurrence, OccupancyLane } from '../types'
+import { chipStyle, tint } from '../colors'
 
 const auth = useAuth(), toast = useToast(), router = useRouter()
 const week = ref(mondayOf(today()))
@@ -95,7 +96,7 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
     <ul class="access">
       <li v-for="x in myAccess" :key="x.o.start + x.o.slotId">
         <span class="when">{{ dayShort(x.o.start) }} · {{ time(x.o.start) }}–{{ time(x.o.end) }}</span>
-        <span class="row"><span v-for="l in x.lanes" :key="l.laneId" class="chip chip-ok">{{ l.pool }} · {{ l.lane }} — {{ l.allocation!.section }}</span></span>
+        <span class="row"><span v-for="l in x.lanes" :key="l.laneId" class="chip" :style="chipStyle(l.allocation!.color)">{{ l.pool }} · {{ l.lane }} — {{ l.allocation!.section }}</span></span>
       </li>
     </ul>
   </section>
@@ -115,20 +116,20 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
           <h2 class="cap">{{ dayLong(o.start) }}</h2>
           <p><AppIcon name="clock" :size="14" /> {{ time(o.start) }}–{{ time(o.end) }} · {{ o.label }}</p>
         </div>
-        <span class="chip" :class="freeCount(o) ? 'chip-primary' : ''">{{ freeCount(o) }} ligne{{ freeCount(o) > 1 ? 's' : '' }} libre{{ freeCount(o) > 1 ? 's' : '' }}</span>
+        <span class="chip" :class="freeCount(o) ? 'chip-free' : ''">{{ freeCount(o) }} ligne{{ freeCount(o) > 1 ? 's' : '' }} libre{{ freeCount(o) > 1 ? 's' : '' }}</span>
       </div>
       <div v-for="g in pools(o)" :key="g.pool" class="pool">
         <h3>{{ g.pool }}</h3>
         <div class="lanes">
-          <div v-for="l in g.lanes" :key="l.laneId" class="lane" :class="{ mine: isMine(l), taken: l.allocation && !l.allocation.mine, free: isFree(l) }">
+          <div v-for="l in g.lanes" :key="l.laneId" class="lane" :class="{ mine: isMine(l), taken: l.allocation && !l.allocation.mine, free: isFree(l) }"
+            :style="l.allocation ? { background: tint(l.allocation.color, l.allocation.mine ? 0.09 : 0.05), borderColor: tint(l.allocation.color, l.allocation.mine ? 0.6 : 0.3), borderLeft: `4px solid ${l.allocation.color}` } : {}">
             <div class="lane-top">
               <strong>{{ l.lane }}</strong>
-              <span v-if="l.allocation?.mine" class="chip chip-ok"><AppIcon name="star" :size="12" /> {{ l.allocation.section }}</span>
-              <span v-else-if="l.allocation" class="chip">{{ l.allocation.section }}</span>
-              <span v-else-if="isFree(l)" class="chip chip-primary">Libre</span>
+              <span v-if="l.allocation" class="chip" :style="chipStyle(l.allocation.color)"><AppIcon v-if="l.allocation.mine" name="star" :size="12" /> {{ l.allocation.section }}</span>
+              <span v-else-if="isFree(l)" class="chip chip-free">Libre</span>
             </div>
             <router-link v-for="r in l.reservations" :key="r.id" :to="`/sessions/${r.sessionId}`" class="res">
-              <span class="dot" :class="r.status" />{{ r.title }} <small>· {{ r.section }} · {{ time(r.start) }}–{{ time(r.end) }}</small>
+              <span class="dot" :style="r.status === 'PENDING' ? { boxShadow: `inset 0 0 0 2px ${r.color}` } : { background: r.color }" :title="r.status === 'PENDING' ? 'en attente' : 'confirmée'" />{{ r.title }} <small>· {{ r.section }} · {{ time(r.start) }}–{{ time(r.end) }}{{ r.status === 'PENDING' ? ' · en attente' : '' }}</small>
             </router-link>
             <button v-if="canBook(o, l)" class="btn btn-secondary btn-sm book" @click="book(o, l)"><AppIcon name="plus" :size="15" /> Réserver</button>
           </div>
@@ -138,9 +139,9 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
   </div>
 
   <p class="legend muted">
-    <span class="chip chip-ok">Section</span> attribuée à une de vos sections ·
-    <span class="chip">Section</span> attribuée à une autre section ·
-    <span class="chip chip-primary">Libre</span> sur demande, validée par un référent
+    Chaque section a sa couleur (modifiable dans <router-link to="/sections">Sections</router-link>) ·
+    <AppIcon name="star" :size="12" /> vos sections ·
+    <span class="chip chip-free">Libre</span> sur demande, validée par un référent
   </p>
 </template>
 
@@ -160,12 +161,11 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
 .lane { border: 1px solid var(--line); border-radius: 9px; padding: .6rem .7rem; display: flex; flex-direction: column; gap: .35rem; background: #fff }
 .lane.mine { border-color: #9fd5b3; background: #f3fbf6 }
 .lane.taken { background: #f7f9fb }
-.lane.free { border-style: dashed; border-color: var(--primary-100) }
+.lane.free { border-style: dashed; border-color: #c3ccd5 }
 .lane-top { display: flex; justify-content: space-between; align-items: center; gap: .4rem }
 .res { display: block; font-size: .87rem; color: var(--text); text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap }
 .res:hover { color: var(--primary) }
-.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: .35rem; background: var(--muted) }
-.dot.CONFIRMED { background: var(--ok) } .dot.PENDING { background: var(--warn) }
+.dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: .35rem; vertical-align: 0 }
 .book { align-self: flex-start; margin-top: .15rem }
 .legend { margin-top: 1.25rem; font-size: .85rem; line-height: 2 }
 </style>
