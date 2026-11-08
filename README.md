@@ -38,7 +38,7 @@ Menu **Créneaux** (référents) : les plages où le club dispose de la piscine,
 
 **Couleurs** : chaque section a une couleur (attribuée automatiquement, modifiable dans **Sections → Gérer**), reprise sur le planning, la page Lignes d'eau et le plan d'occupation. Séance pleine = confirmée, rayée = en attente de validation.
 
-Page **Planning** : uniquement les créneaux du club du jour (une frise par créneau avec ses lignes ouvertes et la section attribuée) ; les séances exceptionnelles hors créneau sont listées à part. Les flèches passent d'un jour de créneau au suivant.
+Page **Planning**, vue **Mois** : calendrier du mois avec les créneaux et les séances de chaque jour (couleur de la section, ⚠ hors créneau) ; un clic sur un jour ouvre la vue **Jour**. Vue **Jour** : uniquement les créneaux du club du jour (une frise par créneau avec ses lignes ouvertes et la section attribuée) ; les séances exceptionnelles hors créneau sont listées à part. Les flèches passent d'un jour de créneau au suivant.
 
 Page **Lignes d'eau** (accueil) : semaine par semaine, chaque créneau avec ses lignes ouvertes, la section attribuée, les séances réservées, et un résumé **« Mes accès »** pour les sections que l'on encadre (on s'ajoute comme encadrant dans **Sections**). Bouton « Réserver » qui préremplit la séance.
 
