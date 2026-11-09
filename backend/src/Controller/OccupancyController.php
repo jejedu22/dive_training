@@ -29,20 +29,21 @@ class OccupancyController extends ApiController
         }
 
         $reservations = $em->getRepository(Reservation::class)->createQueryBuilder('r')
-            ->where('r.status != :rej')->andWhere('r.endAt > :f')->andWhere('r.startAt < :t')
-            ->setParameter('rej', Reservation::REJECTED)->setParameter('f', $from)->setParameter('t', $to)
+            ->where('r.status NOT IN (:off)')->andWhere('r.endAt > :f')->andWhere('r.startAt < :t')
+            ->setParameter('off', [Reservation::REJECTED, Reservation::CANCELLED])->setParameter('f', $from)->setParameter('t', $to)
             ->getQuery()->getResult();
 
         $out = [];
-        foreach ($slots->occurrences($from, $to) as $o) {
+        foreach ($slots->occurrences($from, $to, true) as $o) {
             $lanes = [];
             foreach ($o['lanes'] as $lane) {
-                $alloc = $o['slot']->allocationFor($lane);
+                $owner = $slots->allocationFor($o, $lane); // plan effectif (exceptions comprises)
                 $res = array_values(array_filter($reservations, fn (Reservation $r) =>
                     $r->getLane()->getId() === $lane->getId() && $r->getStartAt() < $o['end'] && $r->getEndAt() > $o['start']));
                 $lanes[] = [
                     'laneId' => $lane->getId(), 'lane' => $lane->getName(), 'poolId' => $lane->getPool()->getId(), 'pool' => $lane->getPool()->getName(),
-                    'allocation' => $alloc ? ['sectionId' => $alloc->getSection()->getId(), 'section' => $alloc->getSection()->getName(), 'color' => $alloc->getSection()->getColor(), 'mine' => in_array($alloc->getSection()->getId(), $mine, true)] : null,
+                    'allocation' => $owner ? ['sectionId' => $owner->getId(), 'section' => $owner->getName(), 'color' => $owner->getColor(), 'mine' => in_array($owner->getId(), $mine, true)] : null,
+                    'exception' => isset($o['plan']['changed'][$lane->getId()]),
                     'reservations' => array_map(fn (Reservation $r) => [
                         'id' => $r->getId(), 'sessionId' => $r->getSession()->getId(), 'title' => $r->getSession()->getTitle(),
                         'sectionId' => $r->getSession()->getSection()->getId(), 'section' => $r->getSession()->getSection()->getName(), 'color' => $r->getSession()->getSection()->getColor(),
@@ -54,6 +55,8 @@ class OccupancyController extends ApiController
             $out[] = [
                 'slotId' => $o['slot']->getId(), 'label' => $o['slot']->getLabel() ?? 'Créneau club',
                 'start' => $o['start']->format(\DATE_ATOM), 'end' => $o['end']->format(\DATE_ATOM), 'lanes' => $lanes,
+                'cancelled' => $o['plan']['cancelled'],
+                'exceptions' => array_map(fn ($x) => ['id' => $x->getId(), 'label' => $x->getLabel(), 'rule' => $x->describe(), 'cancelled' => $x->isCancelled()], $o['plan']['overrides']),
             ];
         }
         return $this->json(['mySectionIds' => $mine, 'occurrences' => $out]);

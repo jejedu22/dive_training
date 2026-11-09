@@ -2,11 +2,11 @@
 namespace App\Controller;
 
 use App\Entity\Reservation;
-use App\Service\{Presenter, ReservationConflictChecker};
+use App\Service\{Presenter, ReservationConflictChecker, SlotService};
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
-use Symfony\Component\HttpKernel\Exception\ConflictHttpException;
+use Symfony\Component\HttpKernel\Exception\{BadRequestHttpException, ConflictHttpException};
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -25,8 +25,15 @@ class ReservationController extends ApiController
 
     /** Validation par un référent. Re-vérifie les conflits dans une transaction verrouillée. */
     #[Route('/{id}/confirm', methods: 'POST'), IsGranted('ROLE_REFERENT')]
-    public function confirm(Reservation $r, EntityManagerInterface $em, ReservationConflictChecker $checker): JsonResponse
+    public function confirm(Reservation $r, EntityManagerInterface $em, ReservationConflictChecker $checker, SlotService $slots): JsonResponse
     {
+        if ($r->getStatus() !== Reservation::PENDING) throw new BadRequestHttpException('Cette demande n\'est plus en attente');
+        // Plan effectif du jour : la ligne a pu être attribuée à une autre section par une exception
+        $occ = $slots->hasSlots() ? $slots->findOccurrence($r->getStartAt(), $r->getEndAt(), $r->getLane()) : null;
+        $owner = $occ ? $slots->allocationFor($occ, $r->getLane()) : null;
+        if ($owner && $owner->getId() !== $r->getSession()->getSection()->getId()) {
+            throw new ConflictHttpException(sprintf('%s est attribuée à « %s » ce jour-là', $r->getLane()->getName(), $owner->getName()));
+        }
         $em->wrapInTransaction(function () use ($r, $em, $checker) {
             $em->lock($r->getLane(), LockMode::PESSIMISTIC_WRITE);
             if ($checker->findConflicts($r->getLane(), $r->getStartAt(), $r->getEndAt(), $r->getId())) {

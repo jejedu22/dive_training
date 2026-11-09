@@ -1,7 +1,7 @@
 <?php
 namespace App\Service;
 
-use App\Entity\{ClubSlot, Lane, Pool, Section, SlotAllocation};
+use App\Entity\{ClubSlot, Lane, OverrideAllocation, Pool, Reservation, Section, SlotAllocation, SlotOverride};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\DependencyInjection\Attribute\Autowire;
 use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
@@ -133,12 +133,42 @@ final class SlotService
     }
 
     /**
-     * Occurrences des créneaux qui recoupent [from, to[.
-     * @return list<array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[]}>
+     * Plan effectif d'un créneau à une date : plan habituel, puis exceptions mensuelles,
+     * puis exceptions à date précise (la dernière a le dernier mot).
+     * @return array{alloc: array<int, ?Section>, cancelled: bool, overrides: SlotOverride[], changed: array<int, true>}
      */
-    public function occurrences(\DateTimeImmutable $from, \DateTimeImmutable $to): array
+    public function planFor(ClubSlot $slot, string $ymd, ?SlotOverride $exclude = null): array
     {
-        $slots = $this->all();
+        $alloc = [];
+        foreach ($slot->getAllocations() as $a) $alloc[$a->getLane()->getId()] = $a->getSection();
+        $matching = array_filter($slot->getOverrides()->getValues(), fn (SlotOverride $o) => $o !== $exclude && $o->matches($ymd));
+        usort($matching, fn (SlotOverride $a, SlotOverride $b) => [$a->getKind() === SlotOverride::DATE, $a->getId()] <=> [$b->getKind() === SlotOverride::DATE, $b->getId()]);
+        $cancelled = false;
+        $changed = [];
+        foreach ($matching as $o) {
+            if ($o->isCancelled()) $cancelled = true;
+            foreach ($o->getAllocations() as $a) {
+                $alloc[$a->getLane()->getId()] = $a->getSection();
+                $changed[$a->getLane()->getId()] = true;
+            }
+        }
+        return ['alloc' => $alloc, 'cancelled' => $cancelled, 'overrides' => array_values($matching), 'changed' => $changed];
+    }
+
+    /** Section à qui la ligne est attribuée sur cette occurrence (null = libre). */
+    public function allocationFor(array $occurrence, Lane $lane): ?Section
+    {
+        return $occurrence['plan']['alloc'][$lane->getId()] ?? null;
+    }
+
+    /**
+     * Occurrences des créneaux qui recoupent [from, to[, avec leur plan effectif.
+     * Les occurrences annulées par une exception ne sont renvoyées que si $withCancelled.
+     * @return list<array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[], plan: array}>
+     */
+    public function occurrences(\DateTimeImmutable $from, \DateTimeImmutable $to, bool $withCancelled = false, ?ClubSlot $only = null): array
+    {
+        $slots = $only ? [$only] : $this->all();
         if (!$slots || $to <= $from) return [];
         $out = [];
         $day = $from->setTimezone($this->tz)->setTime(0, 0);
@@ -152,7 +182,10 @@ final class SlotService
                 if ($slot->getValidUntil() && $date > $slot->getValidUntil()->format('Y-m-d')) continue;
                 $start = new \DateTimeImmutable("$date {$slot->getStartTime()}", $this->tz);
                 $end = new \DateTimeImmutable("$date {$slot->getEndTime()}", $this->tz);
-                if ($start < $to && $end > $from) $out[] = ['slot' => $slot, 'start' => $start, 'end' => $end, 'lanes' => $this->availableLanes($slot)];
+                if (!($start < $to && $end > $from)) continue;
+                $plan = $this->planFor($slot, $date);
+                if ($plan['cancelled'] && !$withCancelled) continue;
+                $out[] = ['slot' => $slot, 'start' => $start, 'end' => $end, 'lanes' => $this->availableLanes($slot), 'plan' => $plan];
             }
         }
         usort($out, fn ($a, $b) => $a['start'] <=> $b['start']);
@@ -160,8 +193,7 @@ final class SlotService
     }
 
     /**
-     * Occurrence de créneau qui contient entièrement [start, end] et où la ligne est ouverte.
-     * @return array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[]}|null
+     * Occurrence (non annulée) qui contient entièrement [start, end] et où la ligne est ouverte.
      */
     public function findOccurrence(\DateTimeImmutable $start, \DateTimeImmutable $end, Lane $lane): ?array
     {
@@ -169,5 +201,85 @@ final class SlotService
             if ($o['start'] <= $start && $end <= $o['end'] && $this->isLaneAvailable($o['slot'], $lane)) return $o;
         }
         return null;
+    }
+
+    /** Valide et applique les données d'une exception reçues de l'API. */
+    public function hydrateOverride(SlotOverride $o, array $d): SlotOverride
+    {
+        $slot = $o->getSlot();
+        $kind = $d['kind'] ?? $o->getKind();
+        if (!in_array($kind, [SlotOverride::DATE, SlotOverride::MONTHLY], true)) throw new BadRequestHttpException('Type d\'exception invalide (date ou monthly)');
+        $o->setKind($kind)->setLabel($d['label'] ?? $o->getLabel())->setCancelled((bool) ($d['cancelled'] ?? $o->isCancelled()));
+        $date = fn (string $k) => isset($d[$k]) && $d[$k] !== '' && $d[$k] !== null
+            ? (preg_match('/^\d{4}-\d{2}-\d{2}$/', (string) $d[$k]) ? new \DateTimeImmutable($d[$k]) : throw new BadRequestHttpException("Date invalide : $k (AAAA-MM-JJ)"))
+            : null;
+        if ($kind === SlotOverride::DATE) {
+            $day = $date('date') ?? $o->getDate() ?? throw new BadRequestHttpException('Choisissez la date');
+            if (!in_array((int) $day->format('N'), $slot->getWeekdays(), true)) throw new BadRequestHttpException('Ce créneau n\'a pas lieu ce jour-là de la semaine');
+            $o->setDate($day)->setWeekday(null)->setNth(null)->setValidFrom(null)->setValidUntil(null);
+        } else {
+            $weekday = (int) ($d['weekday'] ?? $o->getWeekday());
+            $nth = (int) ($d['nth'] ?? $o->getNth());
+            if (!in_array($weekday, $slot->getWeekdays(), true)) throw new BadRequestHttpException('Ce créneau n\'a pas lieu ce jour-là de la semaine');
+            if (!in_array($nth, [1, 2, 3, 4, -1], true)) throw new BadRequestHttpException('Rang invalide (1er à 4e, ou dernier)');
+            $o->setDate(null)->setWeekday($weekday)->setNth($nth);
+            if (array_key_exists('validFrom', $d)) $o->setValidFrom($date('validFrom'));
+            if (array_key_exists('validUntil', $d)) $o->setValidUntil($date('validUntil'));
+        }
+        if (array_key_exists('allocations', $d)) {
+            if (!is_array($d['allocations'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionId":2|null}]');
+            $o->clearAllocations();
+            $this->em->flush(); // supprime les anciennes lignes avant d'insérer (contrainte d'unicité)
+            foreach ($d['allocations'] as $it) {
+                $lane = $this->em->find(Lane::class, $it['laneId'] ?? 0) ?? throw new BadRequestHttpException('Ligne introuvable');
+                if (!$this->isLaneAvailable($slot, $lane)) throw new BadRequestHttpException(sprintf('%s (%s) n\'est pas ouverte sur ce créneau', $lane->getName(), $lane->getPool()->getName()));
+                $section = empty($it['sectionId']) ? null : ($this->em->find(Section::class, $it['sectionId']) ?? throw new BadRequestHttpException('Section introuvable'));
+                $o->addAllocation((new OverrideAllocation())->setLane($lane)->setSection($section));
+            }
+        }
+        if (!$o->isCancelled() && $o->getAllocations()->isEmpty()) {
+            throw new BadRequestHttpException('Indiquez au moins une ligne à modifier, ou cochez « créneau annulé »');
+        }
+        return $o;
+    }
+
+    /**
+     * Annule les réservations à venir que l'exception rend caduques :
+     * créneau annulé ; ligne attribuée à une autre section ; ligne libérée alors qu'elle était à la section.
+     * @return int nombre de réservations annulées
+     */
+    public function applyOverride(SlotOverride $o): int
+    {
+        $now = new \DateTimeImmutable();
+        $count = 0;
+        foreach ($this->occurrences($now, $now->modify('+366 days'), true, $o->getSlot()) as $occ) {
+            $ymd = $occ['start']->format('Y-m-d');
+            if (!$o->matches($ymd)) continue;
+            $before = $this->planFor($o->getSlot(), $ymd, $o);
+            $after = $occ['plan'];
+            $touched = [];
+            foreach ($o->getAllocations() as $a) $touched[$a->getLane()->getId()] = true;
+            $reservations = $this->em->createQueryBuilder()->select('r')->from(Reservation::class, 'r')
+                ->where('r.startAt < :end')->andWhere('r.endAt > :start')->andWhere('r.status IN (:st)')
+                ->setParameter('start', $occ['start'])->setParameter('end', $occ['end'])
+                ->setParameter('st', [Reservation::PENDING, Reservation::CONFIRMED])->getQuery()->getResult();
+            $reason = sprintf('Exception « %s » (%s)', $o->getLabel() ?? 'plan modifié', $o->describe());
+            foreach ($reservations as $r) {
+                /** @var Reservation $r */
+                $laneId = $r->getLane()->getId();
+                if (!$this->isLaneAvailable($o->getSlot(), $r->getLane())) continue;
+                $sectionId = $r->getSession()->getSection()->getId();
+                $newSection = $after['alloc'][$laneId] ?? null;
+                $cancel = $after['cancelled']
+                    || (isset($touched[$laneId]) && $newSection !== null && $newSection->getId() !== $sectionId)
+                    || (isset($touched[$laneId]) && $newSection === null && ($before['alloc'][$laneId] ?? null)?->getId() === $sectionId);
+                if ($cancel) {
+                    $r->cancel($reason);
+                    $count++;
+                }
+            }
+        }
+        $this->em->flush();
+        return $count;
     }
 }

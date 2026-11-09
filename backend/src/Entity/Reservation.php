@@ -11,6 +11,8 @@ class Reservation
     public const PENDING = 'PENDING';
     public const CONFIRMED = 'CONFIRMED';
     public const REJECTED = 'REJECTED';
+    /** Annulée automatiquement (exception au plan d'occupation). */
+    public const CANCELLED = 'CANCELLED';
 
     #[ORM\Id, ORM\GeneratedValue, ORM\Column]
     private ?int $id = null;
@@ -28,6 +30,8 @@ class Reservation
     private ?User $requestedBy = null;
     #[ORM\ManyToOne]
     private ?User $validatedBy = null;
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $cancelReason = null;
 
     public function getId(): ?int { return $this->id; }
     public function getSession(): ?DiveSession { return $this->session; }
@@ -44,4 +48,8 @@ class Reservation
     public function setRequestedBy(?User $u): static { $this->requestedBy = $u; return $this; }
     public function getValidatedBy(): ?User { return $this->validatedBy; }
     public function setValidatedBy(?User $u): static { $this->validatedBy = $u; return $this; }
+    public function getCancelReason(): ?string { return $this->cancelReason; }
+    public function cancel(string $reason): static { $this->status = self::CANCELLED; $this->cancelReason = mb_substr($reason, 0, 255); return $this; }
+    /** Réservation qui occupe encore la ligne (ni refusée, ni annulée). */
+    public function isActive(): bool { return !in_array($this->status, [self::REJECTED, self::CANCELLED], true); }
 }

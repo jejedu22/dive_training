@@ -14,7 +14,7 @@ class CalendarController extends ApiController
     public function calendar(Request $req, EntityManagerInterface $em, SlotService $slots): JsonResponse
     {
         $qb = $em->getRepository(Reservation::class)->createQueryBuilder('r')
-            ->where('r.status != :rej')->setParameter('rej', Reservation::REJECTED)->orderBy('r.startAt');
+            ->where('r.status NOT IN (:off)')->setParameter('off', [Reservation::REJECTED, Reservation::CANCELLED])->orderBy('r.startAt');
         if ($f = $req->query->get('from')) $qb->andWhere('r.endAt > :f')->setParameter('f', $this->date($f, 'from'));
         if ($t = $req->query->get('to')) $qb->andWhere('r.startAt < :t')->setParameter('t', $this->date($t, 'to'));
 
@@ -37,7 +37,7 @@ class CalendarController extends ApiController
         // Créneaux du club sur la période (affichés en fond du planning)
         $from = $req->query->get('from') ? $this->date($req->query->get('from'), 'from') : null;
         $to = $req->query->get('to') ? $this->date($req->query->get('to'), 'to') : null;
-        $occ = ($from && $to && $to->getTimestamp() - $from->getTimestamp() <= (31 * 86400 + 7200)) ? $slots->occurrences($from, $to) : [];
+        $occ = ($from && $to && $to->getTimestamp() - $from->getTimestamp() <= (31 * 86400 + 7200)) ? $slots->occurrences($from, $to, true) : [];
 
         return $this->json(['resources' => $resources, 'events' => $events, 'slots' => array_map(Presenter::occurrence(...), $occ)]);
     }

@@ -41,11 +41,21 @@ class ClubSlot
     #[ORM\OneToMany(mappedBy: 'slot', targetEntity: SlotAllocation::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
     private Collection $allocations;
 
+    /** @var Collection<int, SlotOverride> */
+    #[ORM\OneToMany(mappedBy: 'slot', targetEntity: SlotOverride::class, cascade: ['persist', 'remove'], orphanRemoval: true)]
+    #[ORM\OrderBy(['id' => 'ASC'])]
+    private Collection $overrides;
+
     public function __construct()
     {
         $this->lanes = new ArrayCollection();
         $this->allocations = new ArrayCollection();
+        $this->overrides = new ArrayCollection();
     }
+    /** @return Collection<int, SlotOverride> */
+    public function getOverrides(): Collection { return $this->overrides; }
+    public function addOverride(SlotOverride $o): static { $this->overrides->add($o); $o->setSlot($this); return $this; }
+    public function removeOverride(SlotOverride $o): static { $this->overrides->removeElement($o); return $this; }
 
     public function getId(): ?int { return $this->id; }
     public function getLabel(): ?string { return $this->label; }

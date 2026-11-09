@@ -56,11 +56,11 @@ class SessionController extends ApiController
                     $list = implode(' ; ', array_map(fn ($s) => $s->describe(), $slots->all()));
                     throw new UnprocessableEntityHttpException(sprintf('%s n\'est pas ouverte au club à cet horaire. Créneaux : %s', $laneName, $list));
                 }
-                $alloc = $occ ? $occ['slot']->allocationFor($lane) : null;
-                if ($alloc && $alloc->getSection()->getId() !== $section->getId() && !$force) {
-                    throw new ConflictHttpException(sprintf('%s est attribuée à « %s » sur ce créneau', $laneName, $alloc->getSection()->getName()));
+                $owner = $occ ? $slots->allocationFor($occ, $lane) : null; // plan effectif de ce jour-là (exceptions comprises)
+                if ($owner && $owner->getId() !== $section->getId() && !$force) {
+                    throw new ConflictHttpException(sprintf('%s est attribuée à « %s » ce jour-là', $laneName, $owner->getName()));
                 }
-                if ($alloc && $alloc->getSection()->getId() === $section->getId()) $status = Reservation::CONFIRMED;
+                if ($owner && $owner->getId() === $section->getId()) $status = Reservation::CONFIRMED;
             }
             if ($checker->findConflicts($lane, $start, $end)) {
                 throw new ConflictHttpException(sprintf('%s est déjà réservée sur ce créneau', $laneName));

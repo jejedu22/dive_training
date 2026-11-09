@@ -1,7 +1,7 @@
 <?php
 namespace App\Service;
 
-use App\Entity\{ClubSlot, Diver, DiveSession, Lane, Participation, Pool, Reservation, Section, User};
+use App\Entity\{ClubSlot, SlotOverride, Diver, DiveSession, Lane, Participation, Pool, Reservation, Section, User};
 
 /** Transforme les entités en tableaux JSON. */
 final class Presenter
@@ -55,6 +55,7 @@ final class Presenter
             'status' => $r->getStatus(), 'requestedBy' => $r->getRequestedBy()?->getName(), 'validatedBy' => $r->getValidatedBy()?->getName(),
             // confirmée sans validation manuelle = ligne attribuée à la section dans le plan d'occupation
             'planned' => $r->getStatus() === Reservation::CONFIRMED && $r->getValidatedBy() === null,
+            'cancelReason' => $r->getCancelReason(),
         ];
     }
 
@@ -92,18 +93,39 @@ final class Presenter
             'allocations' => array_map(fn ($a) => [
                 'laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName(), 'color' => $a->getSection()->getColor(),
             ], $s->getAllocations()->getValues()),
+            'overrides' => array_map([self::class, 'override'], $s->getOverrides()->getValues()),
         ];
     }
 
-    /** @param array{slot: ClubSlot, start: \DateTimeImmutable, end: \DateTimeImmutable, lanes: Lane[]} $o */
+    /** Occurrence d'un créneau avec son plan effectif (exceptions comprises). */
     public static function occurrence(array $o): array
     {
+        $allocations = [];
+        foreach ($o['plan']['alloc'] as $laneId => $section) {
+            if ($section) $allocations[] = ['laneId' => $laneId, 'sectionId' => $section->getId(), 'section' => $section->getName(), 'color' => $section->getColor()];
+        }
         return [
             'slotId' => $o['slot']->getId(), 'label' => $o['slot']->getLabel() ?? 'Créneau club',
             'poolId' => $o['slot']->getPool()?->getId(), 'pool' => $o['slot']->getPool()?->getName(),
             'start' => $o['start']->format(self::DATE), 'end' => $o['end']->format(self::DATE),
             'laneIds' => array_map(fn (Lane $l) => $l->getId(), $o['lanes']),
-            'allocations' => array_map(fn ($a) => ['laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()->getId(), 'section' => $a->getSection()->getName(), 'color' => $a->getSection()->getColor()], $o['slot']->getAllocations()->getValues()),
+            'allocations' => $allocations,
+            'cancelled' => $o['plan']['cancelled'],
+            'changedLaneIds' => array_keys($o['plan']['changed']),
+            'exceptions' => array_map(fn (SlotOverride $x) => ['id' => $x->getId(), 'label' => $x->getLabel(), 'rule' => $x->describe(), 'cancelled' => $x->isCancelled()], $o['plan']['overrides']),
+        ];
+    }
+
+    public static function override(SlotOverride $o): array
+    {
+        return [
+            'id' => $o->getId(), 'slotId' => $o->getSlot()?->getId(), 'label' => $o->getLabel(), 'kind' => $o->getKind(),
+            'date' => $o->getDate()?->format('Y-m-d'), 'weekday' => $o->getWeekday(), 'nth' => $o->getNth(),
+            'validFrom' => $o->getValidFrom()?->format('Y-m-d'), 'validUntil' => $o->getValidUntil()?->format('Y-m-d'),
+            'cancelled' => $o->isCancelled(), 'rule' => $o->describe(),
+            'allocations' => array_map(fn ($a) => [
+                'laneId' => $a->getLane()->getId(), 'sectionId' => $a->getSection()?->getId(), 'section' => $a->getSection()?->getName(), 'color' => $a->getSection()?->getColor(),
+            ], $o->getAllocations()->getValues()),
         ];
     }
 }
