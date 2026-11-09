@@ -12,8 +12,8 @@ import type { Role, User } from '../types'
 
 type Level = 'instructor' | 'referent' | 'admin'
 const levels: { value: Level; label: string; help: string }[] = [
-  { value: 'instructor', label: 'Encadrant', help: 'sections, séances, bouteilles' },
-  { value: 'referent', label: 'Référent', help: '+ valide les réservations, gère créneaux et bassins' },
+  { value: 'instructor', label: 'Encadrant', help: 'consulte le planning, gère ses sections, note les bouteilles' },
+  { value: 'referent', label: 'Référent', help: '+ planifie les créneaux, les lignes et les bassins' },
   { value: 'admin', label: 'Administrateur', help: '+ gère les comptes' },
 ]
 const rolesOf = (l: Level): Role[] => (l === 'admin' ? ['ROLE_ADMIN'] : l === 'referent' ? ['ROLE_REFERENT'] : [])
@@ -124,7 +124,7 @@ async function savePassword() {
 }
 
 async function toggle(u: User) {
-  if (u.active && !confirm(`Désactiver le compte de ${u.name} ? Il ne pourra plus se connecter (ses séances sont conservées).`)) return
+  if (u.active && !confirm(`Désactiver le compte de ${u.name} ? Il ne pourra plus se connecter (ses sections sont conservées).`)) return
   try {
     await put(`/users/${u.id}`, { active: !u.active })
     toast.ok(u.active ? `${u.name} désactivé(e).` : `${u.name} réactivé(e).`)

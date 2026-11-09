@@ -18,7 +18,6 @@ onMounted(() => { addEventListener('online', setOnline); addEventListener('offli
 onUnmounted(() => { removeEventListener('online', setOnline); removeEventListener('offline', setOnline) })
 
 const nav = computed(() => [
-  { to: '/occupation', label: 'Lignes d\'eau', short: 'Lignes', icon: 'waves' },
   { to: '/planning', label: 'Planning', short: 'Planning', icon: 'calendar' },
   { to: '/sections', label: 'Sections', short: 'Sections', icon: 'users' },
   { to: '/slots', label: 'Créneaux', short: 'Créneaux', icon: 'clock' },
@@ -26,7 +25,7 @@ const nav = computed(() => [
   ...(auth.isAdmin ? [{ to: '/users', label: 'Comptes', short: 'Comptes', icon: 'shield' }] : []),
 ])
 // Sur mobile : 4 onglets principaux + « Plus »
-const mobileMain = computed(() => nav.value.slice(0, 4))
+const mobileMain = computed(() => nav.value.slice(0, 3))
 const moreOpen = ref(false)
 const moreActive = computed(() => !mobileMain.value.some((n) => route.path.startsWith(n.to)))
 
@@ -41,7 +40,7 @@ function logout() {
   <template v-if="auth.user">
     <header class="app-header">
       <div class="inner">
-        <router-link to="/occupation" class="brand"><img src="/favicon.png" alt="" width="26" height="26" /> Dive Training</router-link>
+        <router-link to="/planning" class="brand"><img src="/favicon.png" alt="" width="26" height="26" /> Dive Training</router-link>
         <nav class="desktop-nav hide-mobile">
           <router-link v-for="n in nav" :key="n.to" :to="n.to"><AppIcon :name="n.icon" :size="17" />{{ n.label }}</router-link>
         </nav>
@@ -63,7 +62,7 @@ function logout() {
       <div class="sheet" @click.stop>
         <div class="sheet-user"><UserAvatar :name="auth.user.name" :color="auth.user.avatarColor" />
           <div><strong>{{ auth.user.name }}</strong><br /><small>{{ auth.user.email }}</small></div></div>
-        <router-link v-for="n in nav.slice(4)" :key="n.to" :to="n.to" @click="moreOpen = false"><AppIcon :name="n.icon" />{{ n.label }}</router-link>
+         <router-link v-for="n in nav.slice(3)" :key="n.to" :to="n.to" @click="moreOpen = false"><AppIcon :name="n.icon" />{{ n.label }}</router-link>
         <button v-if="!isStandalone" @click="moreOpen = false; openInstall()"><AppIcon name="download" />Installer l'application</button>
         <router-link to="/account" @click="moreOpen = false"><AppIcon name="user" />Mon compte</router-link>
         <button @click="logout"><AppIcon name="logout" />Déconnexion</button>
@@ -91,7 +90,7 @@ function logout() {
 .offline { display: flex; justify-content: center; align-items: center; gap: .4rem; background: var(--warn-50); color: #7a4e00; padding: .4rem; font-size: .9rem }
 
 .tabbar { position: fixed; z-index: 30; bottom: 0; left: 0; right: 0; height: var(--tabbar-h); padding-bottom: env(safe-area-inset-bottom);
-  background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(5, 1fr) }
+  background: #fff; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(4, 1fr) }
 .tabbar a, .tabbar button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; color: var(--muted);
   text-decoration: none; font: inherit; font-size: .7rem; background: none; border: 0; cursor: pointer }
 .tabbar a.router-link-active, .tabbar button.active { color: var(--primary); font-weight: 600 }

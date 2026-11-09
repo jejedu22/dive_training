@@ -8,7 +8,7 @@ export const useAuth = defineStore('auth', {
     isReferent: (s) => !!s.user?.referent,
     isAdmin: (s) => !!s.user?.admin,
     /** Préférences de l'utilisateur (valeurs par défaut si non connecté). */
-    prefs: (s): Preferences => s.user?.preferences ?? { homePage: 'occupation', planningView: 'day', onlyMine: false },
+    prefs: (s): Preferences => s.user?.preferences ?? { homePage: 'planning', planningView: 'week', onlyMine: false },
   },
   actions: {
     async login(email: string, password: string) {

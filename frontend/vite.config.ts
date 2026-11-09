@@ -47,16 +47,16 @@ export default defineConfig({
       manifest: {
         name: 'Dive Training',
         short_name: 'Dive',
-        description: 'Formation des plongeurs : créneaux du club, occupation des lignes d\'eau, sections et bouteilles.',
+        description: 'Planning d\'occupation des lignes d\'eau du club : créneaux, sections, bouteilles.',
         lang: 'fr',
         theme_color: '#0b6aa8',
         background_color: '#f4f7fa',
         display: 'standalone',
-        start_url: '/occupation',
+        start_url: '/planning',
         scope: '/',
         shortcuts: [
-          { name: 'Lignes d\'eau', url: '/occupation', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
           { name: 'Planning', url: '/planning', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
+          { name: 'Sections', url: '/sections', icons: [{ src: 'pwa-192.png', sizes: '192x192' }] },
         ],
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },

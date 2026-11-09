@@ -59,7 +59,7 @@ async function addLane(p: Pool) {
   await run(() => post(`/pools/${p.id}/lanes`, body), 'Ligne ajoutée.') // load() propose ensuite le nom suivant
 }
 function removeLane(l: Lane) {
-  if (!confirm(`Supprimer « ${l.name} » ?\nElle disparaît des créneaux et du plan d'occupation, ainsi que ses réservations passées.`)) return
+  if (!confirm(`Supprimer « ${l.name} » ?\nElle disparaît des créneaux et du planning.`)) return
   run(() => del(`/lanes/${l.id}`), 'Ligne supprimée.')
 }
 function removePool(p: Pool) {
@@ -130,7 +130,7 @@ function removePool(p: Pool) {
             <button class="btn btn-secondary btn-icon btn-sm" title="Ajouter la ligne" :disabled="!newLane.name.trim()"><AppIcon name="plus" :size="16" /></button>
           </form>
         </div>
-        <p class="muted small">Chaque modification est enregistrée immédiatement. Une ligne qui a des réservations à venir ne peut pas être supprimée.</p>
+        <p class="muted small">Chaque modification est enregistrée immédiatement.</p>
         <div class="row" style="justify-content:flex-end"><button class="btn btn-danger btn-sm" @click="removePool(p)"><AppIcon name="trash" :size="15" /> Supprimer le bassin</button></div>
       </template>
     </article>

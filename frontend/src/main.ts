@@ -13,15 +13,14 @@ const router = createRouter({
   routes: [
     { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Connexion' } },
     { path: '/', component: { render: () => null } }, // redirigé vers la page d'accueil choisie (voir beforeEach)
-    { path: '/occupation', component: () => import('./views/OccupationView.vue'), meta: { title: 'Lignes d\'eau' } },
     { path: '/planning', component: () => import('./views/PlanningView.vue'), meta: { title: 'Planning' } },
+    { path: '/occupation', redirect: '/planning' }, // ancienne page « Lignes d'eau »
     { path: '/sections', component: () => import('./views/SectionsView.vue'), meta: { title: 'Sections' } },
-    { path: '/sessions/:id', component: () => import('./views/SessionView.vue'), props: true, meta: { title: 'Séance' } },
     { path: '/slots', component: () => import('./views/SlotsView.vue'), meta: { title: 'Créneaux' } },
     { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true, title: 'Bassins' } },
     { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true, title: 'Comptes' } },
     { path: '/account', component: () => import('./views/AccountView.vue'), meta: { title: 'Mon compte' } },
-    { path: '/:pathMatch(.*)*', redirect: '/occupation' },
+    { path: '/:pathMatch(.*)*', redirect: '/planning' },
   ],
 })
 
@@ -39,8 +38,8 @@ router.beforeEach(async (to) => {
     return '/login'
   }
   if (to.path === '/') return `/${auth.prefs.homePage}` // page d'accueil choisie dans « Mon compte »
-  if (to.meta.admin && !auth.isAdmin) return '/occupation'
-  if (to.meta.referent && !auth.isReferent) return '/occupation'
+  if (to.meta.admin && !auth.isAdmin) return '/planning'
+  if (to.meta.referent && !auth.isReferent) return '/planning'
   return true
 })
 router.afterEach((to) => {

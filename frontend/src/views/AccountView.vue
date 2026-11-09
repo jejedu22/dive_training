@@ -15,9 +15,9 @@ const auth = useAuth(), toast = useToast(), router = useRouter()
 const AVATAR_COLORS = ['#0b6aa8', '#1e8449', '#7d3c98', '#c0392b', '#d35400', '#0e8a96', '#3949ab', '#8d5524', '#c2378f', '#16212c']
 const role = computed(() => (auth.isAdmin ? 'Administrateur' : auth.isReferent ? 'Référent' : 'Encadrant'))
 const roleHelp = computed(() =>
-  auth.isAdmin ? 'Gère les comptes, valide les réservations, définit créneaux et bassins.'
-    : auth.isReferent ? 'Valide les réservations, définit créneaux et bassins.'
-      : 'Gère ses sections, crée des séances, suit les bouteilles.')
+  auth.isAdmin ? 'Gère les comptes, planifie les créneaux, les lignes et les bassins.'
+    : auth.isReferent ? 'Planifie les créneaux, les lignes et les bassins.'
+      : 'Consulte le planning, gère ses sections et note les bouteilles.')
 
 // --- Profil
 const profile = ref({ name: '', email: '', phone: '', avatarColor: '' })
@@ -62,7 +62,7 @@ async function setPref<K extends keyof Preferences>(key: K, value: Preferences[K
   }
 }
 const homePages: { value: Preferences['homePage']; label: string }[] = [
-  { value: 'occupation', label: 'Lignes d\'eau' }, { value: 'planning', label: 'Planning' }, { value: 'sections', label: 'Sections' },
+  { value: 'planning', label: 'Planning' }, { value: 'sections', label: 'Sections' },
 ]
 
 // --- Mes sections
@@ -160,12 +160,12 @@ onMounted(async () => {
           </div>
           <div class="field">Affichage du planning par défaut
             <div class="toggle-group">
-              <label class="toggle" :class="{ on: auth.prefs.planningView === 'day' }"><input type="radio" :checked="auth.prefs.planningView === 'day'" @change="setPref('planningView', 'day')" />Jour</label>
+              <label class="toggle" :class="{ on: auth.prefs.planningView === 'week' }"><input type="radio" :checked="auth.prefs.planningView === 'week'" @change="setPref('planningView', 'week')" />Semaine</label>
               <label class="toggle" :class="{ on: auth.prefs.planningView === 'month' }"><input type="radio" :checked="auth.prefs.planningView === 'month'" @change="setPref('planningView', 'month')" />Mois</label>
             </div>
           </div>
           <label class="check"><input type="checkbox" :checked="auth.prefs.onlyMine" @change="setPref('onlyMine', ($event.target as HTMLInputElement).checked)" />
-            Lignes d'eau : n'afficher que mes accès</label>
+            Planning : n'afficher que mes sections</label>
         </div>
 
         <h3 class="sub">Mes sections</h3>

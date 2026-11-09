@@ -80,7 +80,7 @@ async function save() {
   }
 }
 async function remove(s: ClubSlot) {
-  if (!confirm(`Supprimer le créneau « ${s.description} » ?\nLes séances déjà créées sont conservées.`)) return
+  if (!confirm(`Supprimer le créneau « ${s.description} » ?\nSes lignes disparaissent du planning.`)) return
   try {
     await del(`/slots/${s.id}`)
     toast.ok('Créneau supprimé.')
@@ -117,7 +117,7 @@ function openOverride(s: ClubSlot, o: Override | null = null) {
   ovOpen.value = true
 }
 async function removeOverride(o: Override) {
-  if (!confirm(`Supprimer l'exception « ${o.label ?? o.rule} » ?\nLe plan habituel s'appliquera de nouveau (les séances déjà annulées le restent).`)) return
+  if (!confirm(`Supprimer l'exception « ${o.label ?? o.rule} » ?\nLe plan habituel s'appliquera de nouveau.`)) return
   try {
     await del(`/overrides/${o.id}`)
     toast.ok('Exception supprimée.')
@@ -200,7 +200,7 @@ const validity = (s: ClubSlot) =>
 
   <div v-if="!slots.length && !showForm" class="card empty">
     <strong>Aucun créneau défini</strong>
-    Tant qu'il n'y a pas de créneau, les séances peuvent être planifiées à toute heure.
+    Créez les créneaux du club (jours, horaires, lignes ouvertes), puis répartissez les lignes entre les sections.
   </div>
 
   <div class="stack">
@@ -228,7 +228,7 @@ const validity = (s: ClubSlot) =>
             <span>{{ l.name }}</span>
             <select v-if="auth.isReferent && plans[s.id]" v-model.number="plans[s.id][l.id]" :class="{ set: plans[s.id][l.id] }"
               :style="sectionColor(plans[s.id][l.id]) ? { borderColor: sectionColor(plans[s.id][l.id]), background: tint(sectionColor(plans[s.id][l.id])!, 0.1), color: sectionColor(plans[s.id][l.id]) } : {}">
-              <option :value="undefined">Libre (sur demande)</option>
+              <option :value="undefined">Libre</option>
               <option v-for="sec in sections" :key="sec.id" :value="sec.id">{{ sec.name }}</option>
             </select>
             <span v-else-if="s.allocations.find((a) => a.laneId === l.id)" class="chip" :style="chipStyle(s.allocations.find((a) => a.laneId === l.id)!.color)">{{ s.allocations.find((a) => a.laneId === l.id)!.section }}</span>
@@ -264,8 +264,8 @@ const validity = (s: ClubSlot) =>
   </div>
   <OverrideEditor v-if="ovSlot" v-model="ovOpen" :slot="ovSlot" :pools="pools" :sections="sections" :override="ovEdit" @saved="load" />
   <p v-if="slots.length" class="muted" style="font-size:.85rem;margin-top:1rem">
-    Une ligne attribuée à une section lui est réservée à chaque occurrence du créneau : ses encadrants y créent leurs séances sans validation.
-    Une ligne libre reste disponible sur demande, validée par un référent.
+    Le plan habituel s'applique à chaque occurrence du créneau. Les exceptions (règles mensuelles, dates) le modifient pour certaines dates ;
+    un changement sur une seule date se fait aussi directement en cliquant sur une case du Planning.
   </p>
 </template>
 

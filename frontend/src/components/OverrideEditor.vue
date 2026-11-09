@@ -62,9 +62,9 @@ async function save() {
   }
   try {
     const r = props.override
-      ? await put<Override & { cancelledReservations: number }>(`/overrides/${props.override.id}`, body)
-      : await post<Override & { cancelledReservations: number }>(`/slots/${props.slot.id}/overrides`, body)
-    toast.ok(`Exception enregistrée (${r.rule}).` + (r.cancelledReservations ? ` ${r.cancelledReservations} séance(s) annulée(s).` : ''))
+      ? await put<Override>(`/overrides/${props.override.id}`, body)
+      : await post<Override>(`/slots/${props.slot.id}/overrides`, body)
+    toast.ok(`Exception enregistrée (${r.rule}).`)
     open.value = false
     emit('saved')
   } catch (e) {
@@ -122,7 +122,7 @@ async function save() {
           </div>
         </div>
       </div>
-      <p class="muted small"><AppIcon name="info" :size="14" /> Les séances déjà prévues par une section qui perd sa ligne ce jour-là seront <strong>annulées automatiquement</strong>.</p>
+      <p class="muted small"><AppIcon name="info" :size="14" /> Pour un changement ponctuel sur une seule date, vous pouvez aussi cliquer directement sur une case du planning.</p>
     </form>
     <div v-if="error" class="alert alert-ko" style="margin-top:.75rem"><AppIcon name="alert" /> <span>{{ error }}</span></div>
     <template #actions>

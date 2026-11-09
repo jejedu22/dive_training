@@ -17,7 +17,7 @@ export const textOn = (hex: string) => {
 }
 /** Pastille de section : fond teinté, texte et bordure de la couleur. */
 export const chipStyle = (hex: string) => ({ background: tint(hex, 0.13), color: hex, boxShadow: `inset 0 0 0 1px ${tint(hex, 0.35)}` })
-/** Bloc de séance : plein si confirmée, rayé si en attente. */
+/** Bloc rayé (en attente) ou plein. */
 export const eventStyle = (hex: string, status: string) =>
   status === 'PENDING'
     ? { background: `repeating-linear-gradient(135deg, ${hex} 0 7px, ${tint(hex, 0.7)} 7px 14px)`, color: textOn(hex), outline: `2px dashed ${hex}`, outlineOffset: '-2px' }
