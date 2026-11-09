@@ -1,11 +1,11 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\{Lane, Pool, Reservation};
+use App\Entity\{Lane, Pool};
 use App\Service\Presenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
-use Symfony\Component\HttpKernel\Exception\{BadRequestHttpException, ConflictHttpException};
+use Symfony\Component\HttpKernel\Exception\BadRequestHttpException;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
@@ -42,12 +42,10 @@ class PoolController extends ApiController
         return $this->json(Presenter::pool($pool));
     }
 
-    /** Supprime un bassin et ses lignes (refusé s'il reste des réservations à venir). */
+    /** Supprime un bassin et ses lignes (ainsi que leurs attributions dans les créneaux). */
     #[Route('/api/pools/{id}', methods: 'DELETE', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
     public function delete(Pool $pool, EntityManagerInterface $em): JsonResponse
     {
-        $upcoming = $this->upcoming($em, $pool->getLanes()->getValues());
-        if ($upcoming) throw new ConflictHttpException(sprintf('Impossible : %d réservation(s) à venir dans « %s ». Supprimez ou déplacez d\'abord ces séances.', $upcoming, $pool->getName()));
         $em->remove($pool);
         $em->flush();
         return $this->json(null, 204);
@@ -89,12 +87,10 @@ class PoolController extends ApiController
         return $this->json(Presenter::lane($lane));
     }
 
-    /** Supprime une ligne (refusé s'il reste des réservations à venir dessus). */
+    /** Supprime une ligne (et ses attributions dans les créneaux). */
     #[Route('/api/lanes/{id}', methods: 'DELETE', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
     public function deleteLane(Lane $lane, EntityManagerInterface $em): JsonResponse
     {
-        $upcoming = $this->upcoming($em, [$lane]);
-        if ($upcoming) throw new ConflictHttpException(sprintf('Impossible : %d réservation(s) à venir sur %s. Supprimez ou déplacez d\'abord ces séances.', $upcoming, $lane->getName()));
         $lane->getPool()->removeLane($lane);
         $em->flush();
         return $this->json(null, 204);
@@ -112,15 +108,5 @@ class PoolController extends ApiController
         if ($v === null || $v === '') return null;
         if (!is_numeric($v) || $v < 0 || $v > 100) throw new BadRequestHttpException('Profondeur invalide (en mètres, entre 0 et 100)');
         return (float) $v;
-    }
-
-    /** Nombre de réservations (non refusées) à venir sur ces lignes. @param Lane[] $lanes */
-    private function upcoming(EntityManagerInterface $em, array $lanes): int
-    {
-        if (!$lanes) return 0;
-        return (int) $em->createQueryBuilder()->select('COUNT(r.id)')->from(Reservation::class, 'r')
-            ->where('r.lane IN (:lanes)')->andWhere('r.endAt > :now')->andWhere('r.status != :rej')
-            ->setParameter('lanes', $lanes)->setParameter('now', new \DateTimeImmutable())->setParameter('rej', Reservation::REJECTED)
-            ->getQuery()->getSingleScalarResult();
     }
 }

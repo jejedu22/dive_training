@@ -39,8 +39,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public const ROLES = ['ROLE_INSTRUCTOR', 'ROLE_REFERENT', 'ROLE_ADMIN'];
     /** Préférences et valeurs autorisées (la première est la valeur par défaut). */
     public const PREFERENCES = [
-        'homePage' => ['occupation', 'planning', 'sections'],
-        'planningView' => ['day', 'month'],
+        'homePage' => ['planning', 'sections'],
+        'planningView' => ['week', 'month'],
         'onlyMine' => [false, true],
     ];
     private const AVATAR_COLORS = ['#0b6aa8', '#1e8449', '#7d3c98', '#c0392b', '#d35400', '#0e8a96', '#3949ab', '#8d5524'];
@@ -74,7 +74,8 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getPreferences(): array
     {
         $out = [];
-        foreach (self::PREFERENCES as $key => $allowed) $out[$key] = $this->preferences[$key] ?? $allowed[0];
+        // une valeur qui n'existe plus (ancienne version) reprend la valeur par défaut
+        foreach (self::PREFERENCES as $key => $allowed) $out[$key] = in_array($this->preferences[$key] ?? null, $allowed, true) ? $this->preferences[$key] : $allowed[0];
         return $out;
     }
     public function setPreferences(array $p): static { $this->preferences = $p; return $this; }

@@ -77,32 +77,22 @@ class PoolEditTest extends WebTestCase
         [$code, $out] = $this->call('PUT', "/api/pools/{$pool['id']}/lanes/order", ['laneIds' => array_values($reordered)], $this->ref);
         $this->assertSame(200, $code);
         $this->assertSame(array_values($reordered), array_column($out['lanes'], 'id'));
-        // l'ordre est repris par le planning
-        [, $cal] = $this->call('GET', '/api/calendar?from=2026-12-07T00:00:00Z&to=2026-12-08T00:00:00Z', null, $this->inst);
-        $this->assertSame(array_map('strval', array_values($reordered)), array_column($cal['resources'], 'id'));
+        // l'ordre est repris dans la liste des bassins (et donc partout dans l'application)
+        [, $pools] = $this->call('GET', '/api/pools', null, $this->inst);
+        $this->assertSame(array_values($reordered), array_column($pools[0]['lanes'], 'id'));
     }
 
-    public function testDeleteLaneAndPoolOnlyWithoutUpcomingReservations(): void
+    public function testDeleteLaneAndPool(): void
     {
         $pool = $this->pool(3);
         [$l1, $l2, $l3] = array_column($pool['lanes'], 'id');
-        $section = $this->call('POST', '/api/sections', ['name' => 'N1'], $this->inst)[1]['id'];
-        $future = (new \DateTimeImmutable('+10 days'))->setTime(19, 0);
-        $this->call('POST', '/api/sessions', ['sectionId' => $section, 'title' => 'S', 'start' => $future->format(DATE_ATOM),
-            'end' => $future->modify('+1 hour')->format(DATE_ATOM), 'laneIds' => [$l1]], $this->inst);
-
         $this->assertSame(403, $this->call('DELETE', "/api/lanes/$l2", null, $this->inst)[0]);
-        [$code, $body] = $this->call('DELETE', "/api/lanes/$l1", null, $this->ref);
-        $this->assertSame(409, $code);
-        $this->assertStringContainsString('1 réservation(s) à venir', $body['message']);
         $this->assertSame(204, $this->call('DELETE', "/api/lanes/$l3", null, $this->ref)[0]);
         [, $pools] = $this->call('GET', '/api/pools', null, $this->ref);
         $this->assertSame([$l1, $l2], array_column($pools[0]['lanes'], 'id'));
-
-        $this->assertSame(409, $this->call('DELETE', "/api/pools/{$pool['id']}", null, $this->ref)[0], 'réservation à venir dans le bassin');
-        $other = $this->call('POST', '/api/pools', ['name' => 'Petit bain', 'lanes' => [['name' => 'L1']]], $this->ref)[1];
-        $this->assertSame(204, $this->call('DELETE', "/api/pools/{$other['id']}", null, $this->ref)[0]);
+        $this->assertSame(403, $this->call('DELETE', "/api/pools/{$pool['id']}", null, $this->inst)[0]);
+        $this->assertSame(204, $this->call('DELETE', "/api/pools/{$pool['id']}", null, $this->ref)[0]);
         [, $pools] = $this->call('GET', '/api/pools', null, $this->ref);
-        $this->assertSame(['Fosse'], array_column($pools, 'name'));
+        $this->assertSame([], $pools);
     }
 }

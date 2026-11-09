@@ -47,21 +47,21 @@ class AccountTest extends WebTestCase
         $t = $this->login('marie@club.fr');
         [$code, $me] = $this->call('GET', '/api/me', null, $t);
         $this->assertSame(200, $code);
-        $this->assertSame(['homePage' => 'occupation', 'planningView' => 'day', 'onlyMine' => false], $me['preferences']);
+        $this->assertSame(['homePage' => 'planning', 'planningView' => 'week', 'onlyMine' => false], $me['preferences']);
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $me['avatarColor']);
         $this->assertNotNull($me['createdAt']);
         $this->assertNotNull($me['lastLoginAt'], 'dernière connexion enregistrée');
 
         [$code, $me] = $this->call('PUT', '/api/me', ['name' => 'Marie D.', 'phone' => '06 12 34 56 78', 'avatarColor' => '#C2378F',
-            'preferences' => ['homePage' => 'planning', 'planningView' => 'month', 'onlyMine' => true]], $t);
+            'preferences' => ['homePage' => 'sections', 'planningView' => 'month', 'onlyMine' => true]], $t);
         $this->assertSame(200, $code);
         $this->assertSame(['Marie D.', '06 12 34 56 78', '#c2378f'], [$me['name'], $me['phone'], $me['avatarColor']]);
-        $this->assertSame(['homePage' => 'planning', 'planningView' => 'month', 'onlyMine' => true], $me['preferences']);
+        $this->assertSame(['homePage' => 'sections', 'planningView' => 'month', 'onlyMine' => true], $me['preferences']);
         $this->assertArrayNotHasKey('token', $me, 'pas de nouveau jeton sans changement d\'e-mail');
 
         // une préférence modifiée seule conserve les autres
-        [, $me] = $this->call('PUT', '/api/me', ['preferences' => ['planningView' => 'day']], $t);
-        $this->assertSame(['homePage' => 'planning', 'planningView' => 'day', 'onlyMine' => true], $me['preferences']);
+        [, $me] = $this->call('PUT', '/api/me', ['preferences' => ['planningView' => 'week']], $t);
+        $this->assertSame(['homePage' => 'sections', 'planningView' => 'week', 'onlyMine' => true], $me['preferences']);
 
         foreach ([['name' => ' '], ['phone' => 'abc'], ['avatarColor' => 'rose'], ['preferences' => ['homePage' => 'ailleurs']], ['preferences' => ['theme' => 'x']]] as $bad) {
             $this->assertSame(400, $this->call('PUT', '/api/me', $bad, $t)[0], json_encode($bad));

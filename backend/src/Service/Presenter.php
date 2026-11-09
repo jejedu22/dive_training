@@ -1,7 +1,7 @@
 <?php
 namespace App\Service;
 
-use App\Entity\{ClubSlot, SlotOverride, Diver, DiveSession, Lane, Participation, Pool, Reservation, Section, User};
+use App\Entity\{ClubSlot, SlotOverride, Diver, Lane, Pool, Section, User};
 
 /** Transforme les entités en tableaux JSON. */
 final class Presenter
@@ -45,38 +45,8 @@ final class Presenter
         ];
     }
 
-    public static function reservation(Reservation $r): array
-    {
-        return [
-            'id' => $r->getId(), 'sessionId' => $r->getSession()?->getId(), 'title' => $r->getSession()?->getTitle(),
-            'section' => $r->getSession()?->getSection()?->getName(), 'color' => $r->getSession()?->getSection()?->getColor(),
-            'lane' => self::lane($r->getLane()), 'pool' => $r->getLane()->getPool()?->getName(),
-            'start' => $r->getStartAt()->format(self::DATE), 'end' => $r->getEndAt()->format(self::DATE),
-            'status' => $r->getStatus(), 'requestedBy' => $r->getRequestedBy()?->getName(), 'validatedBy' => $r->getValidatedBy()?->getName(),
-            // confirmée sans validation manuelle = ligne attribuée à la section dans le plan d'occupation
-            'planned' => $r->getStatus() === Reservation::CONFIRMED && $r->getValidatedBy() === null,
-            'cancelReason' => $r->getCancelReason(),
-        ];
-    }
 
-    public static function participation(Participation $p): array
-    {
-        return ['diver' => self::diver($p->getDiver()), 'usesTank' => $p->usesTank()];
-    }
 
-    public static function session(DiveSession $s, bool $detail = true): array
-    {
-        $data = [
-            'id' => $s->getId(), 'title' => $s->getTitle(), 'sectionId' => $s->getSection()?->getId(), 'section' => $s->getSection()?->getName(), 'color' => $s->getSection()?->getColor(),
-            'start' => $s->getStartAt()->format(self::DATE), 'end' => $s->getEndAt()->format(self::DATE),
-            'reservations' => array_map([self::class, 'reservation'], $s->getReservations()->getValues()),
-        ];
-        if ($detail) {
-            $data['participants'] = array_map([self::class, 'participation'], $s->getParticipations()->getValues());
-            $data['tankCount'] = count(array_filter($s->getParticipations()->toArray(), fn (Participation $p) => $p->usesTank()));
-        }
-        return $data;
-    }
 
     public static function slot(ClubSlot $s, SlotService $slots): array
     {
