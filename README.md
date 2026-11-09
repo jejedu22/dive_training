@@ -44,7 +44,7 @@ L'application sert à **planifier l'occupation des lignes d'eau** : pour chaque 
 - **Planning** (page d'accueil) : un tableau, une ligne par date de créneau, une colonne par ligne d'eau, la case à la couleur de la section ; vue **Semaine** ou **Mois** ; « Mes lignes » résume les prochaines dates de vos sections.
   - **Référent** : clic sur une case pour la changer **ce jour-là seulement** (une section, libre, ou « comme d'habitude » ; option « tout le bassin ») ; clic sur la date pour **annuler / rétablir** le créneau ce jour-là.
   - **Bouteilles** : clic sur une case de section (ou la colonne Bouteilles) : élèves de la section avec la case « bouteille » pour cette date. Modifiable par les encadrants de la section et les référents ; consultable par tous.
-- **Sections** : nom, couleur, encadrants, élèves.
+- **Sections** : nom (renommable avec le crayon ✎, ainsi que le niveau visé et la saison), couleur, encadrants, élèves.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
 ## Application mobile (PWA)

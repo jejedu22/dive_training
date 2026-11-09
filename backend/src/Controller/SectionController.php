@@ -24,8 +24,8 @@ class SectionController extends ApiController
     public function create(Request $req, EntityManagerInterface $em): JsonResponse
     {
         $d = $this->body($req);
-        $this->required($d, 'name');
-        $s = (new Section())->setName($d['name'])->setTargetLevel($d['targetLevel'] ?? null)->setSeason($d['season'] ?? null)
+        $s = (new Section())->setName($this->text($d['name'] ?? '', 120, 'Nom', true))
+            ->setTargetLevel($this->text($d['targetLevel'] ?? null, 40, 'Niveau visé'))->setSeason($this->text($d['season'] ?? null, 20, 'Saison'))
             ->setColor(isset($d['color']) ? $this->color($d['color']) : $this->nextColor($em));
         $s->addInstructor($this->getUser());
         $em->persist($s);
@@ -37,9 +37,9 @@ class SectionController extends ApiController
     public function update(Section $s, Request $req, EntityManagerInterface $em): JsonResponse
     {
         $d = $this->body($req);
-        isset($d['name']) && $s->setName($d['name']);
-        array_key_exists('targetLevel', $d) && $s->setTargetLevel($d['targetLevel']);
-        array_key_exists('season', $d) && $s->setSeason($d['season']);
+        array_key_exists('name', $d) && $s->setName($this->text($d['name'], 120, 'Nom', true));
+        array_key_exists('targetLevel', $d) && $s->setTargetLevel($this->text($d['targetLevel'], 40, 'Niveau visé'));
+        array_key_exists('season', $d) && $s->setSeason($this->text($d['season'], 20, 'Saison'));
         isset($d['color']) && $s->setColor($this->color($d['color']));
         $em->flush();
         return $this->json(Presenter::section($s));
@@ -83,6 +83,18 @@ class SectionController extends ApiController
         $s->removeDiver($diver);
         $em->flush();
         return $this->json(Presenter::section($s));
+    }
+
+    /** Texte nettoyé ; vide = null (ou refusé si obligatoire). */
+    private function text(mixed $v, int $max, string $label, bool $required = false): ?string
+    {
+        $v = trim((string) ($v ?? ''));
+        if ($v === '') {
+            if ($required) throw new BadRequestHttpException("$label requis");
+            return null;
+        }
+        if (mb_strlen($v) > $max) throw new BadRequestHttpException("$label : $max caractères maximum");
+        return $v;
     }
 
     private function color(mixed $c): string

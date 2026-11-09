@@ -49,6 +49,22 @@ const detach = (s: Section, d: Diver) => run(() => del(`/sections/${s.id}/divers
 const addInstructor = (s: Section) => pickInstructor.value[s.id] && run(() => post(`/sections/${s.id}/instructors`, { userId: pickInstructor.value[s.id] }).then(() => (pickInstructor.value[s.id] = undefined)), 'Encadrant ajouté.')
 const removeInstructor = (s: Section, id: number) => run(() => del(`/sections/${s.id}/instructors/${id}`), 'Encadrant retiré.')
 const setColor = (s: Section, color: string) => color !== s.color && run(() => put(`/sections/${s.id}`, { color }), `Couleur de ${s.name} modifiée.`)
+// --- Renommer / modifier une section (nom, niveau visé, saison)
+const editing = ref<Record<number, { name: string; targetLevel: string; season: string }>>({})
+const startEdit = (s: Section) => (editing.value[s.id] = { name: s.name, targetLevel: s.targetLevel ?? '', season: s.season ?? '' })
+const cancelEdit = (s: Section) => delete editing.value[s.id]
+async function saveEdit(s: Section) {
+  const f = editing.value[s.id]
+  if (!f?.name.trim()) return
+  try {
+    await put(`/sections/${s.id}`, f)
+    toast.ok(f.name.trim() !== s.name ? `Section renommée « ${f.name.trim()} ».` : 'Section modifiée.')
+    delete editing.value[s.id]
+    await load()
+  } catch (e) {
+    toast.error(e)
+  }
+}
 const joinSection = (s: Section) => run(() => post(`/sections/${s.id}/instructors`, { userId: auth.user!.id }), `Vous encadrez maintenant ${s.name}.`)
 
 function diverForm(s: Section) {
@@ -82,9 +98,22 @@ const createDiver = (s: Section) => run(async () => {
 
   <div class="stack">
     <article v-for="s in sorted" :key="s.id" class="card" :style="{ borderLeftColor: s.color }">
-      <div class="card-head">
+      <form v-if="editing[s.id]" class="edit" @submit.prevent="saveEdit(s)" @keydown.esc="cancelEdit(s)">
+        <div class="fields">
+          <label class="field">Nom<input v-model="editing[s.id].name" maxlength="120" required autofocus /></label>
+          <label class="field">Niveau visé<input v-model="editing[s.id].targetLevel" maxlength="40" placeholder="N1, N2, Apnée…" /></label>
+          <label class="field">Saison<input v-model="editing[s.id].season" maxlength="20" placeholder="2026-2027" /></label>
+        </div>
+        <div class="row" style="margin-top:.6rem">
+          <button class="btn btn-sm" :disabled="!editing[s.id].name.trim()"><AppIcon name="check" :size="15" /> Enregistrer</button>
+          <button type="button" class="btn btn-ghost btn-sm" @click="cancelEdit(s)">Annuler</button>
+        </div>
+      </form>
+      <div v-else class="card-head">
         <div>
-          <h2><span class="swatch" :style="{ background: s.color }" />{{ s.name }} <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
+          <h2><span class="swatch" :style="{ background: s.color }" />{{ s.name }}
+            <button class="btn btn-ghost btn-icon btn-sm" title="Renommer la section" @click="startEdit(s)"><AppIcon name="edit" :size="15" /></button>
+            <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
           <p>{{ [s.targetLevel, s.season].filter(Boolean).join(' · ') || '—' }} · {{ s.divers.length }} élève{{ s.divers.length > 1 ? 's' : '' }}</p>
         </div>
         <div class="row">
@@ -145,6 +174,7 @@ const createDiver = (s: Section) => run(async () => {
 
 <style scoped>
 .card { border-left: 5px solid var(--line) }
+.edit { margin-bottom: .75rem; padding-bottom: .75rem; border-bottom: 1px solid var(--line) }
 .swatch { width: 14px; height: 14px; border-radius: 4px; display: inline-block; flex: none }
 .colors { margin-bottom: .6rem; gap: .35rem }
 .color { width: 28px; height: 28px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); cursor: pointer; padding: 0; position: relative }

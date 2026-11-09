@@ -184,4 +184,17 @@ class PlanningTest extends ApiTestCase
         $this->assertSame(['Apnée', 'N1+N2', 'libre'], $this->lanesOf('2027-02-15'));
         $this->assertSame(['N1+Apnée', 'N1', 'libre'], $this->lanesOf('2027-02-22'), 'les autres lundis gardent le plan habituel');
     }
+
+    public function testRenameSection(): void
+    {
+        $id = $this->sec['N1'];
+        [$code, $s] = $this->call('PUT', "/api/sections/$id", ['name' => '  Niveau 1 – lundi ', 'targetLevel' => 'N1', 'season' => '2026-2027'], $this->inst);
+        $this->assertSame([200, 'Niveau 1 – lundi', 'N1', '2026-2027'], [$code, $s['name'], $s['targetLevel'], $s['season']]);
+        $this->assertSame(400, $this->call('PUT', "/api/sections/$id", ['name' => '   '], $this->inst)[0], 'nom obligatoire');
+        $this->assertSame(400, $this->call('PUT', "/api/sections/$id", ['name' => str_repeat('x', 121)], $this->inst)[0]);
+        [, $s] = $this->call('PUT', "/api/sections/$id", ['season' => ''], $this->inst);
+        $this->assertNull($s['season']);
+        // le nouveau nom apparaît dans le planning
+        $this->assertSame(['Niveau 1 – lundi', 'Niveau 1 – lundi', 'N2'], $this->lanesOf('2027-02-08'));
+    }
 }
