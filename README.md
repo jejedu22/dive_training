@@ -1,5 +1,5 @@
 # Dive Training
-Gestion de la formation de plongeurs en piscine : sections, planning de réservation des lignes d'eau (plusieurs bassins), suivi « qui plonge avec bouteille ».
+Planning d'occupation des lignes d'eau du club de plongée : créneaux, plan habituel et exceptions par date, sections, suivi « qui fait bouteille ».
 
 Stack : Symfony 7 (API JWT) · Vue 3 + Vite + Pinia · PostgreSQL · Docker · Traefik. Proposition détaillée : [docs/PROPOSITION.md](docs/PROPOSITION.md).
 
