@@ -7,6 +7,28 @@
         <env name="JWT_PASSPHRASE" value="test" force="true"/>
         <env name="DATABASE_URL" value="sqlite:///%kernel.project_dir%/var/test.db" force="true"/>
         <env name="SYMFONY_DEPRECATIONS_HELPER" value="disabled"/>
+
+        <!-- ###+ symfony/framework-bundle ### -->
+        <env name="APP_ENV" value="dev"/>
+        <env name="APP_SECRET" value=""/>
+        <env name="APP_SHARE_DIR" value="var/share"/>
+        <!-- ###- symfony/framework-bundle ### -->
+
+        <!-- ###+ lexik/jwt-authentication-bundle ### -->
+        <env name="JWT_SECRET_KEY" value="%kernel.project_dir%/config/jwt/private.pem"/>
+        <env name="JWT_PUBLIC_KEY" value="%kernel.project_dir%/config/jwt/public.pem"/>
+        <env name="JWT_PASSPHRASE" value="5994cf5f93719c4b770f53a0160971217a4f26c9fa998735866c374418a6284c"/>
+        <!-- ###- lexik/jwt-authentication-bundle ### -->
+
+        <!-- ###+ symfony/routing ### -->
+        <!-- Configure how to generate URLs in non-HTTP contexts, such as CLI commands. -->
+        <!-- See https://symfony.com/doc/current/routing.html#generating-urls-in-commands -->
+        <env name="DEFAULT_URI" value="http://localhost"/>
+        <!-- ###- symfony/routing ### -->
+
+        <!-- ###+ nelmio/cors-bundle ### -->
+        <env name="CORS_ALLOW_ORIGIN" value="^https?://(localhost|127\.0\.0\.1)(:[0-9]+)?$"/>
+        <!-- ###- nelmio/cors-bundle ### -->
     </php>
     <testsuites><testsuite name="all"><directory>tests</directory></testsuite></testsuites>
 </phpunit>

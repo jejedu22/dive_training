@@ -22,6 +22,7 @@ security:
     access_control:
         - { path: ^/api/login_check, roles: PUBLIC_ACCESS }
         - { path: ^/api/health, roles: PUBLIC_ACCESS }
+        - { path: ^/api/public/, roles: PUBLIC_ACCESS }   # liens de partage du planning (lecture seule)
         - { path: ^/api, roles: ROLE_INSTRUCTOR }
     role_hierarchy:
         ROLE_REFERENT: ROLE_INSTRUCTOR
