@@ -22,6 +22,9 @@ class Section
     /** Couleur d'identification sur le planning (#rrggbb). */
     #[ORM\Column(length: 7, nullable: true)]
     private ?string $color = null;
+    /** La section utilise-t-elle des bouteilles ? Sinon, pas de suivi « qui fait bouteille » (ex. apnée, nage). */
+    #[ORM\Column(options: ['default' => true])]
+    private bool $usesTanks = true;
     /** @var Collection<int, User> */
     #[ORM\ManyToMany(targetEntity: User::class)]
     private Collection $instructors;
@@ -39,6 +42,8 @@ class Section
     public function setSeason(?string $v): static { $this->season = $v; return $this; }
     public function getColor(): string { return $this->color ?? self::PALETTE[($this->id ?? 0) % count(self::PALETTE)]; }
     public function setColor(?string $c): static { $this->color = $c !== null ? strtolower($c) : null; return $this; }
+    public function usesTanks(): bool { return $this->usesTanks; }
+    public function setUsesTanks(bool $b): static { $this->usesTanks = $b; return $this; }
     public function getInstructors(): Collection { return $this->instructors; }
     public function getDivers(): Collection { return $this->divers; }
     public function addInstructor(User $u): static { if (!$this->instructors->contains($u)) $this->instructors->add($u); return $this; }

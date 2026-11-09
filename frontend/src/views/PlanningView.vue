@@ -86,12 +86,14 @@ const isMine = (o: PlanningOccurrence) => o.lanes.some((l) => l.sections.some((x
 const rows = computed(() => (data.value?.occurrences ?? []).filter((o) => !onlyMine.value || isMine(o)))
 const cell = (o: PlanningOccurrence, laneId: number) => o.lanes.find((l) => l.laneId === laneId) ?? null
 const isPast = (o: PlanningOccurrence) => new Date(o.end) < new Date()
-/** Sections présentes sur une occurrence (pour la colonne bouteilles). */
+/** Sections présentes sur une occurrence. */
 const sectionsOf = (o: PlanningOccurrence) => {
   const m = new Map<number, PlanningLane['sections'][number]>()
   for (const l of o.lanes) for (const x of l.sections) m.set(x.id, x)
   return [...m.values()]
 }
+/** Sections qui utilisent des bouteilles (colonne Bouteilles, « Mes lignes »). */
+const tankSectionsOf = (o: PlanningOccurrence) => sectionsOf(o).filter((x) => x.usesTanks)
 const legend = computed(() => {
   const m = new Map<number, { id: number; name: string; color: string }>()
   for (const o of data.value?.occurrences ?? []) for (const s of sectionsOf(o)) m.set(s.id, s)
@@ -120,7 +122,10 @@ function onCell(o: PlanningOccurrence, l: PlanningLane | null) {
     return
   }
   if (auth.isReferent) openEdit(o, l)
-  else if (l.sections.length) openTanks(o, l.sections.find((x) => x.mine) ?? l.sections[0]) // ma section d'abord
+  else {
+    const withTanks = l.sections.filter((x) => x.usesTanks)
+    if (withTanks.length) openTanks(o, withTanks.find((x) => x.mine) ?? withTanks[0]) // ma section d'abord
+  }
 }
 /** Coche / décoche une section dans la fenêtre (au plus MAX_SHARE). */
 function toggleSection(id: number) {
@@ -187,7 +192,7 @@ const editTitle = computed(() => {
         <span v-for="l in x.lanes" :key="l.laneId" class="chip" :style="chipStyle(l.sections.find((y) => y.mine)!.color)">{{ l.pool }} · {{ l.lane }}<template v-if="l.sections.length > 1"> (partagée)</template></span>
       </span>
       <span class="row" style="gap:.3rem">
-        <button v-for="s in sectionsOf(x.o).filter((s) => s.mine)" :key="s.id" class="btn btn-secondary btn-sm" @click="openTanks(x.o, s)">
+        <button v-for="s in tankSectionsOf(x.o).filter((s) => s.mine)" :key="s.id" class="btn btn-secondary btn-sm" @click="openTanks(x.o, s)">
           <AppIcon name="tank" :size="15" /> {{ s.name }} : {{ x.o.tanks[s.id] ?? 0 }} bouteille{{ (x.o.tanks[s.id] ?? 0) > 1 ? 's' : '' }}
         </button>
       </span>
@@ -232,7 +237,7 @@ const editTitle = computed(() => {
           <template v-else>
             <template v-for="p in columns" :key="'c' + p.poolId">
               <td v-for="c in p.lanes" :key="c.laneId" class="cell"
-                :class="{ closed: !cell(o, c.laneId), free: cell(o, c.laneId) && !cell(o, c.laneId)!.sections.length, exc: cell(o, c.laneId)?.exception, clickable: auth.isReferent || !!cell(o, c.laneId)?.sections.length }"
+                :class="{ closed: !cell(o, c.laneId), free: cell(o, c.laneId) && !cell(o, c.laneId)!.sections.length, exc: cell(o, c.laneId)?.exception, clickable: auth.isReferent || !!cell(o, c.laneId)?.sections.some((x) => x.usesTanks) }"
                 :title="cell(o, c.laneId) ? `${c.lane} : ${cell(o, c.laneId)!.sections.map((x) => x.name).join(' + ') || 'libre'}${cell(o, c.laneId)!.exception ? ' (modifié ce jour-là)' : ''}` : `${c.lane} : fermée sur ce créneau`"
                 @click="onCell(o, cell(o, c.laneId))">
                 <template v-if="cell(o, c.laneId)">
@@ -245,9 +250,10 @@ const editTitle = computed(() => {
               </td>
             </template>
             <td class="tanks">
-              <button v-for="s in sectionsOf(o)" :key="s.id" class="tank-chip" :style="chipStyle(s.color)" :title="`Bouteilles ${s.name}`" @click="openTanks(o, s)">
+              <button v-for="s in tankSectionsOf(o)" :key="s.id" class="tank-chip" :style="chipStyle(s.color)" :title="`Bouteilles ${s.name}`" @click="openTanks(o, s)">
                 {{ s.name }} <strong>{{ o.tanks[s.id] ?? 0 }}</strong>
               </button>
+              <span v-if="!tankSectionsOf(o).length" class="muted">—</span>
             </td>
           </template>
         </tr>

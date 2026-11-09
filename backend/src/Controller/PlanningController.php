@@ -43,7 +43,7 @@ class PlanningController extends ApiController
                 $lanes[] = [
                     'laneId' => $lane->getId(), 'lane' => $lane->getName(), 'poolId' => $lane->getPool()->getId(), 'pool' => $lane->getPool()->getName(),
                     // une ligne peut être partagée entre plusieurs sections (liste vide = libre)
-                    'sections' => array_map(fn ($s) => ['id' => $s->getId(), 'name' => $s->getName(), 'color' => $s->getColor(), 'mine' => in_array($s->getId(), $mine, true)], $slots->sectionsFor($o, $lane)),
+                    'sections' => array_map(fn ($s) => ['id' => $s->getId(), 'name' => $s->getName(), 'color' => $s->getColor(), 'mine' => in_array($s->getId(), $mine, true), 'usesTanks' => $s->usesTanks()], $slots->sectionsFor($o, $lane)),
                     'exception' => isset($o['plan']['changed'][$lane->getId()]),
                 ];
             }

@@ -26,7 +26,8 @@ class SectionController extends ApiController
         $d = $this->body($req);
         $s = (new Section())->setName($this->text($d['name'] ?? '', 120, 'Nom', true))
             ->setTargetLevel($this->text($d['targetLevel'] ?? null, 40, 'Niveau visé'))->setSeason($this->text($d['season'] ?? null, 20, 'Saison'))
-            ->setColor(isset($d['color']) ? $this->color($d['color']) : $this->nextColor($em));
+            ->setColor(isset($d['color']) ? $this->color($d['color']) : $this->nextColor($em))
+            ->setUsesTanks((bool) ($d['usesTanks'] ?? true));
         $s->addInstructor($this->getUser());
         $em->persist($s);
         $em->flush();
@@ -41,6 +42,7 @@ class SectionController extends ApiController
         array_key_exists('targetLevel', $d) && $s->setTargetLevel($this->text($d['targetLevel'], 40, 'Niveau visé'));
         array_key_exists('season', $d) && $s->setSeason($this->text($d['season'], 20, 'Saison'));
         isset($d['color']) && $s->setColor($this->color($d['color']));
+        array_key_exists('usesTanks', $d) && $s->setUsesTanks((bool) $d['usesTanks']);
         $em->flush();
         return $this->json(Presenter::section($s));
     }

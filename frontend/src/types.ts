@@ -13,7 +13,7 @@ export interface Lane { id: number; name: string; maxDepth: number | null; posit
 export interface Pool { id: number; name: string; lanes: Lane[] }
 export interface Diver { id: number; firstName: string; lastName: string; level: string | null }
 export interface Section {
-  id: number; name: string; targetLevel: string | null; season: string | null; color: string
+  id: number; name: string; targetLevel: string | null; season: string | null; color: string; usesTanks: boolean
   instructors: { id: number; name: string }[]; divers: Diver[]
 }
 export interface Instructor { id: number; name: string }
@@ -37,7 +37,7 @@ export interface ExceptionRef { id: number; label: string | null; rule: string; 
 export interface PlanningLane {
   laneId: number; lane: string; poolId: number; pool: string
   /** Sections qui occupent la ligne (vide = libre ; 2 = ligne partagée). */
-  sections: { id: number; name: string; color: string; mine: boolean }[]
+  sections: { id: number; name: string; color: string; mine: boolean; usesTanks: boolean }[]
   exception: boolean
 }
 export interface PlanningOccurrence {

@@ -33,6 +33,7 @@ class PresenceController extends ApiController
         if (!$me->isReferent() && !$section->getInstructors()->contains($me)) {
             throw new AccessDeniedHttpException('Réservé aux encadrants de la section et aux référents');
         }
+        if (!$section->usesTanks()) throw new BadRequestHttpException('Cette section n\'utilise pas de bouteilles');
         $this->required($d, 'diverId');
         $diver = $em->find(Diver::class, $d['diverId']) ?? throw $this->createNotFoundException('Élève introuvable');
         if (!$section->getDivers()->contains($diver)) throw new BadRequestHttpException('Cet élève n\'est pas dans la section');

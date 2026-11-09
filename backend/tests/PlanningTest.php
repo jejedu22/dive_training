@@ -197,4 +197,25 @@ class PlanningTest extends ApiTestCase
         // le nouveau nom apparaît dans le planning
         $this->assertSame(['Niveau 1 – lundi', 'Niveau 1 – lundi', 'N2'], $this->lanesOf('2027-02-08'));
     }
+
+    public function testSectionWithoutTanks(): void
+    {
+        [, $s] = $this->call('GET', "/api/sections/{$this->sec['N1']}", null, $this->inst);
+        $this->assertTrue($s['usesTanks'], 'par défaut, une section utilise des bouteilles');
+        [, $s] = $this->call('POST', '/api/sections', ['name' => 'Nage', 'usesTanks' => false], $this->inst);
+        $this->assertFalse($s['usesTanks']);
+        [$code, $s] = $this->call('PUT', "/api/sections/{$this->sec['N2']}", ['usesTanks' => false], $this->inst);
+        $this->assertSame([200, false], [$code, $s['usesTanks']]);
+
+        // l'information suit la section dans le planning
+        $lanes = $this->planningOf('2027-02-08')[0]['lanes'];
+        $this->assertSame([true, true, false], array_map(fn ($l) => $l['sections'][0]['usesTanks'], $lanes));
+
+        // pas de bouteilles pour une section qui n'en utilise pas
+        $d = $this->call('POST', '/api/divers', ['firstName' => 'Zoé', 'lastName' => 'Leroy'], $this->inst)[1];
+        $this->call('POST', "/api/sections/{$this->sec['N2']}/divers", ['diverId' => $d['id']], $this->inst);
+        [$code, $body] = $this->call('PUT', '/api/presences', ['slotId' => $this->slot, 'date' => '2027-02-08', 'sectionId' => $this->sec['N2'], 'diverId' => $d['id'], 'usesTank' => true], $this->ref);
+        $this->assertSame(400, $code);
+        $this->assertStringContainsString('n\'utilise pas de bouteilles', $body['message']);
+    }
 }

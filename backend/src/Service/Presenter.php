@@ -39,7 +39,7 @@ final class Presenter
     public static function section(Section $s): array
     {
         return [
-            'id' => $s->getId(), 'name' => $s->getName(), 'targetLevel' => $s->getTargetLevel(), 'season' => $s->getSeason(), 'color' => $s->getColor(),
+            'id' => $s->getId(), 'name' => $s->getName(), 'targetLevel' => $s->getTargetLevel(), 'season' => $s->getSeason(), 'color' => $s->getColor(), 'usesTanks' => $s->usesTanks(),
             'instructors' => array_map([self::class, 'user'], $s->getInstructors()->getValues()),
             'divers' => array_map([self::class, 'diver'], $s->getDivers()->getValues()),
         ];

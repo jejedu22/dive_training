@@ -12,7 +12,7 @@ const sections = ref<Section[]>([])
 const divers = ref<Diver[]>([])
 const instructors = ref<Instructor[]>([])
 const showNew = ref(false)
-const newSection = ref({ name: '', targetLevel: '', season: '' })
+const newSection = ref({ name: '', targetLevel: '', season: '', usesTanks: true })
 const newDiver = ref<Record<number, { firstName: string; lastName: string; level: string }>>({})
 const pickDiver = ref<Record<number, number | undefined>>({})
 const pickInstructor = ref<Record<number, number | undefined>>({})
@@ -41,7 +41,7 @@ async function run(fn: () => Promise<unknown>, ok: string) {
 }
 const addSection = () => run(async () => {
   await post('/sections', newSection.value)
-  newSection.value = { name: '', targetLevel: '', season: '' }
+  newSection.value = { name: '', targetLevel: '', season: '', usesTanks: true }
   showNew.value = false
 }, 'Section créée. Vous en êtes encadrant.')
 const attach = (s: Section) => pickDiver.value[s.id] && run(() => post(`/sections/${s.id}/divers`, { diverId: pickDiver.value[s.id] }).then(() => (pickDiver.value[s.id] = undefined)), 'Élève ajouté.')
@@ -50,8 +50,8 @@ const addInstructor = (s: Section) => pickInstructor.value[s.id] && run(() => po
 const removeInstructor = (s: Section, id: number) => run(() => del(`/sections/${s.id}/instructors/${id}`), 'Encadrant retiré.')
 const setColor = (s: Section, color: string) => color !== s.color && run(() => put(`/sections/${s.id}`, { color }), `Couleur de ${s.name} modifiée.`)
 // --- Renommer / modifier une section (nom, niveau visé, saison)
-const editing = ref<Record<number, { name: string; targetLevel: string; season: string }>>({})
-const startEdit = (s: Section) => (editing.value[s.id] = { name: s.name, targetLevel: s.targetLevel ?? '', season: s.season ?? '' })
+const editing = ref<Record<number, { name: string; targetLevel: string; season: string; usesTanks: boolean }>>({})
+const startEdit = (s: Section) => (editing.value[s.id] = { name: s.name, targetLevel: s.targetLevel ?? '', season: s.season ?? '', usesTanks: s.usesTanks })
 const cancelEdit = (s: Section) => delete editing.value[s.id]
 async function saveEdit(s: Section) {
   const f = editing.value[s.id]
@@ -91,6 +91,7 @@ const createDiver = (s: Section) => run(async () => {
       <label class="field">Niveau visé<input v-model="newSection.targetLevel" placeholder="N1, N2, Apnée…" /></label>
       <label class="field">Saison<input v-model="newSection.season" placeholder="2026-2027" /></label>
     </div>
+    <label class="check" style="margin-top:.75rem"><input v-model="newSection.usesTanks" type="checkbox" /> Cette section utilise des bouteilles (suivi « qui fait bouteille » dans le planning)</label>
     <div class="row" style="margin-top:1rem"><button class="btn"><AppIcon name="check" /> Créer</button></div>
   </form>
 
@@ -104,6 +105,7 @@ const createDiver = (s: Section) => run(async () => {
           <label class="field">Niveau visé<input v-model="editing[s.id].targetLevel" maxlength="40" placeholder="N1, N2, Apnée…" /></label>
           <label class="field">Saison<input v-model="editing[s.id].season" maxlength="20" placeholder="2026-2027" /></label>
         </div>
+        <label class="check" style="margin-top:.6rem"><input v-model="editing[s.id].usesTanks" type="checkbox" /> Cette section utilise des bouteilles</label>
         <div class="row" style="margin-top:.6rem">
           <button class="btn btn-sm" :disabled="!editing[s.id].name.trim()"><AppIcon name="check" :size="15" /> Enregistrer</button>
           <button type="button" class="btn btn-ghost btn-sm" @click="cancelEdit(s)">Annuler</button>
@@ -113,7 +115,8 @@ const createDiver = (s: Section) => run(async () => {
         <div>
           <h2><span class="swatch" :style="{ background: s.color }" />{{ s.name }}
             <button class="btn btn-ghost btn-icon btn-sm" title="Renommer la section" @click="startEdit(s)"><AppIcon name="edit" :size="15" /></button>
-            <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span></h2>
+            <span v-if="isMine(s)" class="chip chip-ok"><AppIcon name="star" :size="12" /> ma section</span>
+            <span v-if="!s.usesTanks" class="chip" title="Pas de suivi des bouteilles dans le planning">sans bouteilles</span></h2>
           <p>{{ [s.targetLevel, s.season].filter(Boolean).join(' · ') || '—' }} · {{ s.divers.length }} élève{{ s.divers.length > 1 ? 's' : '' }}</p>
         </div>
         <div class="row">
