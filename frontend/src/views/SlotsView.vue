@@ -5,7 +5,8 @@ import { del, get, post, put } from '../api'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { WEEKDAYS, dateFr } from '../format'
-import type { ClubSlot, Pool, Section } from '../types'
+import type { ClubSlot, Override, Pool, Section } from '../types'
+import OverrideEditor from '../components/OverrideEditor.vue'
 import { chipStyle, tint } from '../colors'
 
 const auth = useAuth(), toast = useToast()
@@ -106,6 +107,42 @@ const planDirty = (s: ClubSlot) => {
 /** Lignes ouvertes d'un créneau regroupées par bassin (pour l'affichage). */
 const lanesByPool = (s: ClubSlot) =>
   pools.value.map((p) => ({ pool: p, lanes: p.lanes.filter((l) => s.availableLaneIds.includes(l.id)) })).filter((g) => g.lanes.length)
+// --- Exceptions au plan habituel
+const ovOpen = ref(false)
+const ovSlot = ref<ClubSlot | null>(null)
+const ovEdit = ref<Override | null>(null)
+function openOverride(s: ClubSlot, o: Override | null = null) {
+  ovSlot.value = s
+  ovEdit.value = o
+  ovOpen.value = true
+}
+async function removeOverride(o: Override) {
+  if (!confirm(`Supprimer l'exception « ${o.label ?? o.rule} » ?\nLe plan habituel s'appliquera de nouveau (les séances déjà annulées le restent).`)) return
+  try {
+    await del(`/overrides/${o.id}`)
+    toast.ok('Exception supprimée.')
+    await load()
+  } catch (e) {
+    toast.error(e)
+  }
+}
+/** Résumé d'une exception : « Fosse : Ligne 1, Ligne 2 → Apnée ; Ligne 3 → libérée ». */
+function overrideSummary(o: Override) {
+  if (o.cancelled) return 'Créneau annulé'
+  const parts: string[] = []
+  for (const p of pools.value) {
+    const groups = new Map<string, string[]>()
+    for (const l of p.lanes) {
+      const a = o.allocations.find((x) => x.laneId === l.id)
+      if (!a) continue
+      const k = a.section ? `→ ${a.section}` : '→ libérée'
+      if (!groups.has(k)) groups.set(k, [])
+      groups.get(k)!.push(l.name)
+    }
+    if (groups.size) parts.push(`${p.name} : ` + [...groups.entries()].map(([k, lanes]) => `${lanes.join(', ')} ${k}`).join(' ; '))
+  }
+  return parts.join(' — ')
+}
 const sectionColor = (id: number | undefined) => sections.value.find((x) => x.id === id)?.color
 const validity = (s: ClubSlot) =>
   s.validFrom || s.validUntil ? [s.validFrom && `du ${dateFr(s.validFrom)}`, s.validUntil && `au ${dateFr(s.validUntil)}`].filter(Boolean).join(' ') : 'Toute l\'année'
@@ -203,8 +240,29 @@ const validity = (s: ClubSlot) =>
         <button class="btn btn-ok" @click="savePlan(s)"><AppIcon name="check" /> Enregistrer le plan</button>
         <button class="btn btn-secondary" @click="load">Annuler</button>
       </div>
+
+      <div class="exceptions">
+        <div class="block-title row" style="justify-content:space-between">
+          <span>Exceptions <small>— dates où le plan habituel change</small></span>
+          <button v-if="auth.isReferent" class="btn btn-secondary btn-sm" @click="openOverride(s)"><AppIcon name="plus" :size="15" /> Ajouter une exception</button>
+        </div>
+        <p v-if="!s.overrides.length" class="muted small">Aucune : le plan habituel s'applique à chaque occurrence.</p>
+        <div v-for="o in s.overrides" :key="o.id" class="exception" :class="{ cancelled: o.cancelled }">
+          <div>
+            <strong>{{ o.label ?? (o.cancelled ? 'Annulation' : 'Exception') }}</strong>
+            <span class="chip" :class="o.kind === 'monthly' ? 'chip-primary' : ''">{{ o.rule }}</span>
+            <small v-if="o.kind === 'monthly' && (o.validFrom || o.validUntil)" class="muted">{{ o.validFrom ? `du ${dateFr(o.validFrom)}` : '' }} {{ o.validUntil ? `au ${dateFr(o.validUntil)}` : '' }}</small>
+            <div class="muted small">{{ overrideSummary(o) }}</div>
+          </div>
+          <div v-if="auth.isReferent" class="row">
+            <button class="btn btn-ghost btn-icon btn-sm" title="Modifier" @click="openOverride(s, o)"><AppIcon name="edit" :size="15" /></button>
+            <button class="btn btn-ghost btn-icon btn-sm" title="Supprimer" @click="removeOverride(o)"><AppIcon name="trash" :size="15" /></button>
+          </div>
+        </div>
+      </div>
     </article>
   </div>
+  <OverrideEditor v-if="ovSlot" v-model="ovOpen" :slot="ovSlot" :pools="pools" :sections="sections" :override="ovEdit" @saved="load" />
   <p v-if="slots.length" class="muted" style="font-size:.85rem;margin-top:1rem">
     Une ligne attribuée à une section lui est réservée à chaque occurrence du créneau : ses encadrants y créent leurs séances sans validation.
     Une ligne libre reste disponible sur demande, validée par un référent.
@@ -223,4 +281,9 @@ const validity = (s: ClubSlot) =>
 .plan-row { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .3rem 0; border-bottom: 1px dashed var(--line) }
 .plan-row select { min-width: 150px }
 .plan-row select.set { font-weight: 600 }
+.exceptions { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--line) }
+.exception { display: flex; justify-content: space-between; align-items: flex-start; gap: .5rem; padding: .5rem .6rem; border-radius: 8px; background: #fbfaf3; border: 1px solid #efe6c4; margin-top: .4rem }
+.exception.cancelled { background: var(--ko-50); border-color: #f2c4c4 }
+.exception strong { margin-right: .4rem }
+.small { font-size: .85rem }
 </style>

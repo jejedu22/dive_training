@@ -51,12 +51,12 @@ function pools(o: Occurrence) {
   }
   return [...groups.entries()].map(([pool, lanes]) => ({ pool, lanes }))
 }
-const visible = computed(() => (data.value?.occurrences ?? []).filter((o) => !onlyMine.value || o.lanes.some(isMine)))
+const visible = computed(() => (data.value?.occurrences ?? []).filter((o) => !onlyMine.value || (!o.cancelled && o.lanes.some(isMine))))
 
 /** Résumé « mes accès » : lignes attribuées à mes sections, par créneau à venir. */
 const myAccess = computed(() =>
   (data.value?.occurrences ?? [])
-    .filter((o) => !isPast(o))
+    .filter((o) => !isPast(o) && !o.cancelled)
     .map((o) => ({ o, lanes: o.lanes.filter((l) => l.allocation?.mine) }))
     .filter((x) => x.lanes.length),
 )
@@ -65,7 +65,7 @@ const freeCount = (o: Occurrence) => o.lanes.filter(isFree).length
 function book(o: Occurrence, l: OccupancyLane) {
   router.push({ path: '/planning', query: { date: ymd(new Date(o.start)), start: o.start, end: o.end, lane: String(l.laneId), section: l.allocation?.mine ? String(l.allocation.sectionId) : undefined } })
 }
-const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation ? l.allocation.mine : true) && !l.reservations.some((r) => r.mine)
+const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && !o.cancelled && (l.allocation ? l.allocation.mine : true) && !l.reservations.some((r) => r.mine)
 </script>
 
 <template>
@@ -110,14 +110,19 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
   <div v-else-if="data && !visible.length" class="card empty"><strong>Rien pour vos sections cette semaine</strong>Décochez « Seulement mes accès » pour tout voir.</div>
 
   <div class="stack">
-    <article v-for="o in visible" :key="o.start + o.slotId" class="card occ" :class="{ past: isPast(o) }">
+    <article v-for="o in visible" :key="o.start + o.slotId" class="card occ" :class="{ past: isPast(o), cancelled: o.cancelled }">
       <div class="card-head">
         <div>
           <h2 class="cap">{{ dayLong(o.start) }}</h2>
           <p><AppIcon name="clock" :size="14" /> {{ time(o.start) }}–{{ time(o.end) }} · {{ o.label }}</p>
         </div>
-        <span class="chip" :class="freeCount(o) ? 'chip-free' : ''">{{ freeCount(o) }} ligne{{ freeCount(o) > 1 ? 's' : '' }} libre{{ freeCount(o) > 1 ? 's' : '' }}</span>
+        <span v-if="o.cancelled" class="chip chip-ko">Créneau annulé</span>
+        <span v-else class="chip" :class="freeCount(o) ? 'chip-free' : ''">{{ freeCount(o) }} ligne{{ freeCount(o) > 1 ? 's' : '' }} libre{{ freeCount(o) > 1 ? 's' : '' }}</span>
       </div>
+      <p v-if="o.exceptions.length" class="exc-line">
+        <span v-for="x in o.exceptions" :key="x.id" class="chip chip-exc" :title="x.rule">⚑ {{ x.label ?? (x.cancelled ? 'Annulation' : 'Exception') }} · {{ x.rule }}</span>
+      </p>
+      <template v-if="!o.cancelled">
       <div v-for="g in pools(o)" :key="g.pool" class="pool">
         <h3>{{ g.pool }}</h3>
         <div class="lanes">
@@ -128,6 +133,7 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
               <span v-if="l.allocation" class="chip" :style="chipStyle(l.allocation.color)"><AppIcon v-if="l.allocation.mine" name="star" :size="12" /> {{ l.allocation.section }}</span>
               <span v-else-if="isFree(l)" class="chip chip-free">Libre</span>
             </div>
+            <span v-if="l.exception" class="exc-tag">⚑ ce jour-là</span>
             <router-link v-for="r in l.reservations" :key="r.id" :to="`/sessions/${r.sessionId}`" class="res">
               <span class="dot" :style="r.status === 'PENDING' ? { boxShadow: `inset 0 0 0 2px ${r.color}` } : { background: r.color }" :title="r.status === 'PENDING' ? 'en attente' : 'confirmée'" />{{ r.title }} <small>· {{ r.section }} · {{ time(r.start) }}–{{ time(r.end) }}{{ r.status === 'PENDING' ? ' · en attente' : '' }}</small>
             </router-link>
@@ -135,10 +141,12 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
           </div>
         </div>
       </div>
+      </template>
     </article>
   </div>
 
   <p class="legend muted">
+    ⚑ exception au plan habituel ce jour-là ·
     Chaque section a sa couleur (modifiable dans <router-link to="/sections">Sections</router-link>) ·
     <AppIcon name="star" :size="12" /> vos sections ·
     <span class="chip chip-free">Libre</span> sur demande, validée par un référent
@@ -155,6 +163,10 @@ const canBook = (o: Occurrence, l: OccupancyLane) => !isPast(o) && (l.allocation
 .access li { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center }
 .when { font-weight: 600; min-width: 190px }
 .occ.past { opacity: .6 }
+.occ.cancelled { background: #fafafa; border-style: dashed }
+.occ.cancelled h2 { text-decoration: line-through; color: var(--muted) }
+.exc-line { margin: -.25rem 0 .75rem; display: flex; flex-wrap: wrap; gap: .3rem }
+.exc-tag { font-size: .72rem; color: #7a5400; font-weight: 600 }
 .pool + .pool { margin-top: .9rem }
 .pool h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin-bottom: .4rem }
 .lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .6rem }

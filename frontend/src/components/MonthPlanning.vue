@@ -18,7 +18,7 @@ const ms = (iso: string) => new Date(iso).getTime()
 const sessions = computed(() => {
   const m = new Map<number, { sessionId: number; title: string; section: string; color: string; status: string; start: string; end: string; lanes: number; exceptional: boolean }>()
   for (const e of props.data.events) {
-    const inSlot = (props.data.slots ?? []).some((o) => o.laneIds.includes(Number(e.resourceId)) && ms(o.start) <= ms(e.start) && ms(e.end) <= ms(o.end))
+    const inSlot = (props.data.slots ?? []).some((o) => !o.cancelled && o.laneIds.includes(Number(e.resourceId)) && ms(o.start) <= ms(e.start) && ms(e.end) <= ms(o.end))
     const cur = m.get(e.sessionId)
     if (cur) {
       cur.lanes++
@@ -50,7 +50,10 @@ function nextMonth(m: string) {
   return mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, '0')}`
 }
 const inMonth = (d: string) => d.startsWith(props.month)
-const slotsOf = (d: string) => (props.data.slots ?? []).filter((o) => ymd(new Date(o.start)) === d)
+const allSlotsOf = (d: string) => (props.data.slots ?? []).filter((o) => ymd(new Date(o.start)) === d)
+const slotsOf = (d: string) => allSlotsOf(d).filter((o) => !o.cancelled)
+const cancelledOf = (d: string) => allSlotsOf(d).filter((o) => o.cancelled)
+const exceptionsOf = (d: string) => allSlotsOf(d).flatMap((o) => o.exceptions.map((x) => x.label ?? x.rule))
 const sessionsOf = (d: string) => sessions.value.filter((s) => ymd(new Date(s.start)) === d)
 const slotTimes = (d: string) => [...new Set(slotsOf(d).map((o) => `${time(o.start)}–${time(o.end)}`))].join(' · ')
 const DAYS = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim']
@@ -67,7 +70,9 @@ const todayYmd = today()
         @click="inMonth(d) && emit('pick', d)" @keydown.enter="inMonth(d) && emit('pick', d)">
         <template v-if="inMonth(d)">
           <div class="num">{{ Number(d.slice(8)) }}</div>
-          <div v-if="slotsOf(d).length" class="slots"><AppIcon name="clock" :size="11" /> {{ slotTimes(d) }}</div>
+          <div v-if="slotsOf(d).length" class="slots"><AppIcon name="clock" :size="11" /> {{ slotTimes(d) }}
+            <span v-if="exceptionsOf(d).length" class="flag" :title="`Plan modifié : ${exceptionsOf(d).join(', ')}`">⚑</span></div>
+          <div v-if="cancelledOf(d).length" class="cancel" :title="exceptionsOf(d).join(', ')">annulé</div>
           <div class="evs">
             <button v-for="s in sessionsOf(d).slice(0, MAX)" :key="s.sessionId" class="ev" :style="eventStyle(s.color, s.status)"
               :title="`${time(s.start)}–${time(s.end)} · ${s.title} · ${s.section}${s.lanes > 1 ? ` · ${s.lanes} lignes` : ''}${s.status === 'PENDING' ? ' · en attente' : ''}${s.exceptional ? ' · hors créneau' : ''}`"
@@ -99,6 +104,8 @@ const todayYmd = today()
 .evs { display: flex; flex-direction: column; gap: 2px; min-width: 0 }
 .ev { border: 0; border-radius: 4px; padding: 1px .3rem; font: inherit; font-size: .7rem; font-weight: 600; text-align: left; cursor: pointer; min-width: 0 }
 .ev .t { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.flag { color: #b07800; font-weight: 700 }
+.cancel { font-size: .68rem; color: var(--ko); font-weight: 600; text-decoration: line-through }
 .more { font-size: .7rem; color: var(--muted); font-weight: 600; padding-left: .2rem }
 /* Mobile : les séances deviennent des pastilles de couleur */
 @media (max-width: 760px) {

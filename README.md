@@ -38,6 +38,12 @@ Menu **Créneaux** (référents) : les plages où le club dispose de la piscine,
 - **Plan d'occupation** : pour chaque ligne ouverte, la section qui l'occupe (ex. Ligne 1 → Niveau 1), ou « libre ». Il s'applique à chaque occurrence du créneau.
 - **Création d'une séance** : on choisit la section, puis **un créneau du club parmi les prochains où elle a accès à une ligne** (pas d'horaires libres), puis les lignes ; les lignes attribuées à la section sont présélectionnées. Seul un référent peut créer une séance exceptionnelle hors créneau (et s'il n'existe aucun créneau, les horaires sont libres).
 - **Séances** : une ligne attribuée à la section est **confirmée directement** ; une ligne libre attend la **validation d'un référent** ; une ligne fermée ou attribuée à une autre section est refusée. Un référent peut passer outre.
+- **Exceptions** (bouton « Ajouter une exception » sur chaque créneau) : pour certaines dates, le plan habituel change.
+  - **Quand** : chaque mois (1er, 2e, 3e, 4e ou dernier lundi…, avec période facultative) ou une date précise. Une date précise l'emporte sur une règle mensuelle.
+  - **Quoi** : annuler le créneau ce jour-là (piscine fermée…), ou, ligne par ligne, la réattribuer à une section ou la libérer (« Tout le bassin → » pour aller vite). Les lignes non modifiées gardent le plan habituel.
+  - Exemple : « le 1er lundi de chaque mois, Fosse → Apnée ».
+  - Les séances déjà prévues par une section qui perd sa ligne ce jour-là sont **annulées automatiquement** (statut « Annulée » avec le motif). Supprimer l'exception rétablit le plan habituel, sans rétablir ces séances.
+  - Repère ⚑ sur la page Lignes d'eau et le planning ; créneau annulé barré.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
 **Bassins** (référents) : bouton « Modifier » sur chaque bassin pour le renommer, renommer les lignes, indiquer leur profondeur, changer leur ordre, en ajouter ou en supprimer (refusé si la ligne a des réservations à venir), ou supprimer le bassin.
@@ -79,6 +85,6 @@ Tests backend : `cd backend && vendor/bin/phpunit` (SQLite, règles de conflit e
 ## API principale
 `POST /api/login_check` · `GET /api/me` · `GET|POST /api/pools` (+`/lanes`) · `GET|POST /api/sections` (+`/divers`) · `GET|POST /api/divers` ·
 `POST /api/sessions` (séance + demandes de réservation) · `PUT /api/sessions/{id}/participants/{diverId}` (`usesTank`) ·
-`GET|POST|PUT|DELETE /api/slots` · `PUT /api/slots/{id}/allocations` · `GET /api/occupancy?from&to` · `GET /api/instructors` · `GET /api/slots/occurrences?from&to` · `GET /api/calendar?from&to` · `POST /api/reservations/{id}/confirm|reject` (référent).
+`GET|POST|PUT|DELETE /api/slots` · `PUT /api/slots/{id}/allocations` · `POST /api/slots/{id}/overrides` · `PUT|DELETE /api/overrides/{id}` · `GET /api/occupancy?from&to` · `GET /api/instructors` · `GET /api/slots/occurrences?from&to` · `GET /api/calendar?from&to` · `POST /api/reservations/{id}/confirm|reject` (référent).
 
 Règle : une ligne d'eau ne peut avoir deux réservations **confirmées** qui se chevauchent (contrôle à la demande et re-contrôle verrouillé à la validation).

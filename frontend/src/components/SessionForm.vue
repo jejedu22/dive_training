@@ -41,7 +41,7 @@ async function fetchRange(fromYmd: string, days: number) {
   const { from, to } = range(fromYmd, days)
   const data = await get<Occupancy>(`/occupancy?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`)
   const now = Date.now()
-  return data.occurrences.filter((o) => new Date(o.end).getTime() > now)
+  return data.occurrences.filter((o) => !o.cancelled && new Date(o.end).getTime() > now)
 }
 async function load() {
   loading.value = true

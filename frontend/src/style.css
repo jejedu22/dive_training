@@ -57,7 +57,7 @@ input:focus, select:focus, textarea:focus, .btn:focus-visible { outline: 2px sol
 .chip { display: inline-flex; align-items: center; gap: .3rem; padding: .15rem .55rem; border-radius: 999px; font-size: .8rem; font-weight: 600; background: #eef2f6; color: var(--muted); white-space: nowrap }
 .chip-ok, .chip.CONFIRMED { background: var(--ok-50); color: var(--ok) }
 .chip-warn, .chip.PENDING { background: var(--warn-50); color: var(--warn) }
-.chip-ko, .chip.REJECTED { background: var(--ko-50); color: var(--ko) }
+.chip-ko, .chip.REJECTED, .chip.CANCELLED { background: var(--ko-50); color: var(--ko) }
 .chip-primary { background: var(--primary-50); color: var(--primary) }
 
 /* Tableaux */
@@ -85,3 +85,6 @@ tr:last-child td { border-bottom: 0 }
 
 /* Ligne libre : neutre, pour ne pas se confondre avec une couleur de section */
 .chip-free { background: #fff; color: var(--muted); box-shadow: inset 0 0 0 1px #c3ccd5; border: 0; outline: 1px dashed #c3ccd5; outline-offset: -1px }
+
+/* Exception au plan habituel */
+.chip-exc { background: #fff4d6; color: #7a5400; box-shadow: inset 0 0 0 1px #f0d48a }

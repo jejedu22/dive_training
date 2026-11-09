@@ -51,7 +51,8 @@ async function remove() {
     toast.error(e)
   }
 }
-const statusLabel = (r: Reservation) => (r.status === 'CONFIRMED' ? (r.planned ? 'Attribuée (plan)' : 'Confirmée') : r.status === 'PENDING' ? 'En attente' : 'Refusée')
+const statusLabel = (r: Reservation) =>
+  r.status === 'CONFIRMED' ? (r.planned ? 'Attribuée (plan)' : 'Confirmée') : r.status === 'PENDING' ? 'En attente' : r.status === 'CANCELLED' ? 'Annulée' : 'Refusée'
 const total = computed(() => session.value?.participants?.length ?? 0)
 const date = computed(() => session.value?.start.slice(0, 10))
 </script>
@@ -71,7 +72,7 @@ const date = computed(() => session.value?.start.slice(0, 10))
       <section class="card">
         <div class="card-head"><h2>Lignes d'eau</h2></div>
         <div v-for="r in session.reservations" :key="r.id" class="res">
-          <div><strong>{{ r.pool }} · {{ r.lane.name }}</strong><br /><small v-if="r.validatedBy">par {{ r.validatedBy }}</small></div>
+          <div><strong>{{ r.pool }} · {{ r.lane.name }}</strong><br /><small v-if="r.cancelReason" class="error">{{ r.cancelReason }}</small><small v-else-if="r.validatedBy">par {{ r.validatedBy }}</small></div>
           <div class="row">
             <span class="chip" :class="r.status">{{ statusLabel(r) }}</span>
             <template v-if="auth.isReferent && r.status === 'PENDING'">

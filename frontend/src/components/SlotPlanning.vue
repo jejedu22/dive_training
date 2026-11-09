@@ -14,7 +14,8 @@ const emit = defineEmits<{ open: [sessionId: number] }>()
 type Ev = CalendarData['events'][number]
 
 const ms = (iso: string) => new Date(iso).getTime()
-const occurrences = computed(() => [...(props.data.slots ?? [])].sort((a, b) => ms(a.start) - ms(b.start)))
+const occurrences = computed(() => [...(props.data.slots ?? [])].filter((o) => !o.cancelled).sort((a, b) => ms(a.start) - ms(b.start)))
+const cancelledOcc = computed(() => (props.data.slots ?? []).filter((o) => o.cancelled))
 
 /** Une séance est « dans un créneau » si sa ligne y est ouverte et qu'elle tient dans ses horaires. */
 const inSlot = (e: Ev) => occurrences.value.some((o) => o.laneIds.includes(Number(e.resourceId)) && ms(o.start) <= ms(e.start) && ms(e.end) <= ms(o.end))
@@ -56,7 +57,11 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
 
 <template>
   <div class="stack">
-    <div v-if="!occurrences.length && !exceptional.length" class="card empty">
+    <div v-for="o in cancelledOcc" :key="'c' + o.start + o.slotId" class="card cancelled">
+      <AppIcon name="x" :size="17" /> <strong>{{ time(o.start) }}–{{ time(o.end) }} {{ o.label }} : créneau annulé</strong>
+      <span v-for="x in o.exceptions" :key="x.id" class="chip chip-exc">⚑ {{ x.label ?? 'Annulation' }} · {{ x.rule }}</span>
+    </div>
+    <div v-if="!occurrences.length && !exceptional.length && !cancelledOcc.length" class="card empty">
       <strong>Pas de créneau du club ce jour-là</strong>Utilisez les flèches pour aller au créneau précédent ou suivant.
     </div>
 
@@ -65,6 +70,9 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
         <h2><AppIcon name="clock" :size="17" /> {{ time(o.start) }}–{{ time(o.end) }} <span class="muted label">{{ o.label }}</span></h2>
         <span class="chip">{{ o.laneIds.length }} ligne{{ o.laneIds.length > 1 ? 's' : '' }} ouverte{{ o.laneIds.length > 1 ? 's' : '' }}</span>
       </div>
+      <p v-if="o.exceptions.length" class="exc-line">
+        <span v-for="x in o.exceptions" :key="x.id" class="chip chip-exc">⚑ Plan modifié ce jour-là : {{ x.label ?? 'exception' }} ({{ x.rule }})</span>
+      </p>
       <div class="scroll">
         <div class="tl">
           <div class="row-tl head"><div class="lab" /><div class="cells"><span v-for="t in ticks(o)" :key="t">{{ t }}</span></div></div>
@@ -72,8 +80,8 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
             <div class="pool"><span>{{ g.pool }}</span></div>
             <div v-for="r in g.lanes" :key="r.id" class="row-tl lane" :class="{ allocated: allocation(o, r.id) }"
               :style="allocation(o, r.id) ? { '--lane-tint': tint(allocation(o, r.id)!.color, 0.08) } : {}">
-              <div class="lab">
-                <span>{{ r.title }}</span>
+              <div class="lab" :class="{ changed: o.changedLaneIds.includes(Number(r.id)) }">
+                <span>{{ r.title }}<span v-if="o.changedLaneIds.includes(Number(r.id))" class="flag" title="Attribution modifiée ce jour-là"> ⚑</span></span>
                 <span v-if="allocation(o, r.id)" class="chip sec" :style="chipStyle(allocation(o, r.id)!.color)">{{ allocation(o, r.id)!.section }}</span>
                 <span v-else class="chip chip-free sec">libre</span>
               </div>
@@ -122,6 +130,10 @@ const statusText = (s: string) => (s === 'CONFIRMED' ? 'confirmée' : s === 'PEN
 .ev { position: absolute; top: 5px; bottom: 5px; z-index: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font: inherit; font-size: .78rem; font-weight: 600;
   padding: 0 .45rem; border-radius: 6px; border: 0; color: #fff; cursor: pointer; text-align: left }
 .exc { border-left: 4px solid var(--warn) }
+.cancelled { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; color: var(--ko); border-style: dashed }
+.exc-line { margin: -.3rem 0 .6rem; display: flex; flex-wrap: wrap; gap: .3rem }
+.lab.changed { box-shadow: inset 3px 0 0 #e0a21a }
+.flag { color: #b07800; font-size: .8em }
 .exc h2 { color: #7a4e00 }
 .exc-row { display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .8rem; width: 100%; padding: .55rem .25rem; border: 0; border-bottom: 1px solid var(--line);
   background: none; font: inherit; text-align: left; cursor: pointer; color: var(--text) }
