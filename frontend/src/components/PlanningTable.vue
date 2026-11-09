@@ -86,7 +86,7 @@ const title = (c: { lane: string }, l: PlanningLane | null) =>
           <th class="sticky when" :class="{ clickable: editable }" @click="editable && emit('date', o)">
             <span class="d">{{ dayShort(o.start) }}</span>
             <span class="t">{{ time(o.start) }}–{{ time(o.end) }}</span>
-            <span v-for="x in o.exceptions" :key="x.id" class="flag" :title="`${x.label ?? 'Exception'} : ${x.rule}`">⚑ {{ x.label ?? 'modifié' }}</span>
+            <span v-for="x in o.exceptions.filter((y) => !y.punctual)" :key="x.id" class="flag" :title="`${x.label ?? 'Exception'} : ${x.rule}`">⚑ {{ x.label ?? 'modifié' }}</span>
           </th>
           <td v-if="o.cancelled" :colspan="laneCount + (showTanks ? 1 : 0)" class="cancel-cell">Créneau annulé</td>
           <template v-else>

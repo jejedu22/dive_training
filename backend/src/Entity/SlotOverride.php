@@ -17,6 +17,8 @@ use Doctrine\ORM\Mapping as ORM;
 class SlotOverride
 {
     public const DATE = 'date';
+    /** Libellé des modifications faites case par case depuis le planning (non affiché sur le planning). */
+    public const PUNCTUAL_LABEL = 'Modification ponctuelle';
     public const MONTHLY = 'monthly';
     private const DAYS = [1 => 'lundi', 2 => 'mardi', 3 => 'mercredi', 4 => 'jeudi', 5 => 'vendredi', 6 => 'samedi', 7 => 'dimanche'];
 
@@ -72,6 +74,8 @@ class SlotOverride
     public function getAllocations(): Collection { return $this->allocations; }
     public function clearAllocations(): static { $this->allocations->clear(); return $this; }
     public function addAllocation(OverrideAllocation $a): static { $this->allocations->add($a); $a->setOverride($this); return $this; }
+
+    public function isPunctual(): bool { return $this->kind === self::DATE && $this->label === self::PUNCTUAL_LABEL; }
 
     /** S'applique-t-elle à cette date (AAAA-MM-JJ, jour local du club) ? */
     public function matches(string $ymd): bool

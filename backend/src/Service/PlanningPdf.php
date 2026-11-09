@@ -70,7 +70,9 @@ final class PlanningPdf
                 $first = $monday->format('Y-m') === $sunday->format('Y-m') ? $dd->format($monday) : $dm->format($monday);
                 $rows .= sprintf('<tr class="week"><td colspan="%d">Semaine du %s au %s</td></tr>', $laneCount + 1, $e($first), $e($dm->format($sunday)));
             }
-            $exc = $o['exceptions'] ? '<div class="exc">* ' . $e(implode(', ', array_map(fn ($x) => $x['label'] ?? 'modifié', $o['exceptions']))) . '</div>' : '';
+            // étiquettes des exceptions nommées (pas celle des modifications case par case)
+            $named = array_filter($o['exceptions'], fn ($x) => empty($x['punctual']));
+            $exc = $named ? '<div class="exc">* ' . $e(implode(', ', array_map(fn ($x) => $x['label'] ?? 'modifié', $named))) . '</div>' : '';
             $rows .= sprintf('<tr><td class="when"><b>%s</b><br><span class="t">%s–%s</span>%s</td>', $e(ucfirst($fmt->format($start))), $time($o['start']), $time($o['end']), $exc);
             if ($o['cancelled']) {
                 $rows .= sprintf('<td class="cancel" colspan="%d">Créneau annulé</td></tr>', $laneCount);

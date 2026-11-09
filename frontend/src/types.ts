@@ -31,7 +31,7 @@ export interface Override {
   validFrom: string | null; validUntil: string | null; cancelled: boolean; rule: string
   allocations: { laneId: number; sectionId: number | null; section: string | null; color: string | null }[]
 }
-export interface ExceptionRef { id: number; label: string | null; rule: string; cancelled: boolean }
+export interface ExceptionRef { id: number; label: string | null; rule: string; cancelled: boolean; punctual?: boolean }
 
 /** Planning : une occurrence de créneau à une date, avec la section de chaque ligne ouverte. */
 export interface PlanningLane {

@@ -304,7 +304,7 @@ final class SlotService
         $o = null;
         foreach ($slot->getOverrides() as $x) if ($x->getKind() === SlotOverride::DATE && $x->getDate()?->format('Y-m-d') === $ymd) $o = $x;
         if (!$o) {
-            $o = (new SlotOverride())->setKind(SlotOverride::DATE)->setDate($day)->setLabel('Modification ponctuelle');
+            $o = (new SlotOverride())->setKind(SlotOverride::DATE)->setDate($day)->setLabel(SlotOverride::PUNCTUAL_LABEL);
             $slot->addOverride($o);
             $this->em->persist($o);
         }

@@ -50,7 +50,7 @@ final class PlanningService
                 'slotId' => $o['slot']->getId(), 'label' => $o['slot']->getLabel() ?? 'Créneau club', 'date' => $ymd,
                 'start' => $o['start']->format(\DATE_ATOM), 'end' => $o['end']->format(\DATE_ATOM),
                 'cancelled' => $o['plan']['cancelled'], 'lanes' => $lanes,
-                'exceptions' => array_map(fn ($x) => ['id' => $x->getId(), 'label' => $x->getLabel(), 'rule' => $x->describe(), 'cancelled' => $x->isCancelled()], $o['plan']['overrides']),
+                'exceptions' => array_map(fn ($x) => ['id' => $x->getId(), 'label' => $x->getLabel(), 'rule' => $x->describe(), 'cancelled' => $x->isCancelled(), 'punctual' => $x->isPunctual()], $o['plan']['overrides']),
             ];
             if ($tanks) $occ['tanks'] = (object) ($counts[$o['slot']->getId()][$ymd] ?? []);
             $out[] = $occ;

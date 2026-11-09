@@ -99,6 +99,7 @@ class PlanningTest extends ApiTestCase
         // L3 → Apnée ce lundi-là seulement
         [$code, $o] = $this->call('PUT', $url, ['allocations' => [['laneId' => $this->lanes[2], 'sectionId' => $this->sec['Apnée']]]], $this->ref);
         $this->assertSame([200, 'Modification ponctuelle', 'date'], [$code, $o['label'], $o['kind']]);
+        $this->assertTrue($this->planningOf('2027-02-08')[0]['exceptions'][0]['punctual'], 'étiquette non affichée sur le planning');
         $this->assertSame(['N1', 'N1', 'Apnée'], $this->lanesOf('2027-02-08'));
         $this->assertSame(['N1', 'N1', 'N2'], $this->lanesOf('2027-02-15'));
         // une 2e case le même jour s'ajoute à la même modification
