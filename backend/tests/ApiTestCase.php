@@ -57,6 +57,6 @@ abstract class ApiTestCase extends WebTestCase
     {
         $occ = $this->planningOf($day);
         if (!$occ) return ['aucun'];
-        return $occ[0]['cancelled'] ? ['annulé'] : array_map(fn ($l) => $l['section']['name'] ?? 'libre', $occ[0]['lanes']);
+        return $occ[0]['cancelled'] ? ['annulé'] : array_map(fn ($l) => $l['sections'] ? implode('+', array_column($l['sections'], 'name')) : 'libre', $occ[0]['lanes']);
     }
 }

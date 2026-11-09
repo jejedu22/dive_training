@@ -105,60 +105,107 @@ final class SlotService
         return $slot;
     }
 
+    /** Nombre maximum de sections sur une même ligne. */
+    public const MAX_SECTIONS_PER_LANE = 3;
+
     /**
-     * Remplace le plan d'occupation du créneau.
-     * @param list<array{laneId:int, sectionId:int|null}> $items
+     * Sections d'un choix reçu de l'API : {"sectionIds":[1,2]} (vide = libre) ou, ancien format, {"sectionId":1|null}.
+     * @return Section[]|'same'  « same » : revenir au plan (modification ponctuelle uniquement)
+     */
+    private function sectionsOf(array $it, bool $allowSame = false): array|string
+    {
+        $raw = array_key_exists('sectionIds', $it) ? $it['sectionIds'] : ($it['sectionId'] ?? null);
+        if ($raw === 'same') {
+            if (!$allowSame) throw new BadRequestHttpException('Valeur « same » non autorisée ici');
+            return 'same';
+        }
+        $ids = array_values(array_unique(array_filter(array_map('intval', is_array($raw) ? $raw : ($raw === null || $raw === '' ? [] : [$raw])))));
+        if (count($ids) > self::MAX_SECTIONS_PER_LANE) throw new BadRequestHttpException(sprintf('%d sections au maximum sur une ligne', self::MAX_SECTIONS_PER_LANE));
+        return array_map(fn (int $id) => $this->em->find(Section::class, $id) ?? throw new BadRequestHttpException('Section introuvable'), $ids);
+    }
+
+    private function openLane(ClubSlot $slot, mixed $laneId): Lane
+    {
+        $lane = $this->em->find(Lane::class, $laneId ?? 0) ?? throw new BadRequestHttpException("Ligne $laneId introuvable");
+        if (!$this->isLaneAvailable($slot, $lane)) {
+            throw new BadRequestHttpException(sprintf('%s (%s) n\'est pas ouverte sur ce créneau', $lane->getName(), $lane->getPool()->getName()));
+        }
+        return $lane;
+    }
+
+    /** Identifiants triés : pour comparer deux attributions. @param Section[] $sections */
+    private static function key(array $sections): string
+    {
+        $ids = array_map(fn (Section $s) => $s->getId(), $sections);
+        sort($ids);
+        return implode(',', $ids);
+    }
+
+    /**
+     * Remplace le plan habituel du créneau.
+     * @param list<array{laneId:int, sectionIds?:int[], sectionId?:int|null}> $items
      */
     public function setAllocations(ClubSlot $slot, array $items): void
     {
         $wanted = [];
         foreach ($items as $it) {
-            if (!is_array($it) || !isset($it['laneId'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionId":2}]');
-            if (empty($it['sectionId'])) continue;
-            $lane = $this->em->find(Lane::class, $it['laneId']) ?? throw new BadRequestHttpException("Ligne {$it['laneId']} introuvable");
-            if (!$this->isLaneAvailable($slot, $lane)) {
-                throw new BadRequestHttpException(sprintf('%s (%s) n\'est pas ouverte sur ce créneau', $lane->getName(), $lane->getPool()->getName()));
-            }
-            $wanted[$lane->getId()] = [$lane, $this->em->find(Section::class, $it['sectionId']) ?? throw new BadRequestHttpException('Section introuvable')];
+            if (!is_array($it) || !isset($it['laneId'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionIds":[2,3]}]');
+            $lane = $this->openLane($slot, $it['laneId']);
+            $wanted[$lane->getId()] = [$lane, $this->sectionsOf($it)];
         }
-        foreach ($slot->getAllocations()->toArray() as $a) {
-            $laneId = $a->getLane()->getId();
-            if (!isset($wanted[$laneId])) { $slot->removeAllocation($a); continue; }
-            $a->setSection($wanted[$laneId][1]);
-            unset($wanted[$laneId]);
-        }
-        foreach ($wanted as [$lane, $section]) {
-            $slot->addAllocation((new SlotAllocation())->setLane($lane)->setSection($section));
+        foreach ($slot->getAllocations()->toArray() as $a) $slot->removeAllocation($a);
+        $this->em->flush(); // avant de réinsérer (contrainte d'unicité)
+        foreach ($wanted as [$lane, $sections]) {
+            foreach ($sections as $section) $slot->addAllocation((new SlotAllocation())->setLane($lane)->setSection($section));
         }
     }
 
     /**
      * Plan effectif d'un créneau à une date : plan habituel, puis exceptions mensuelles,
      * puis exceptions à date précise (la dernière a le dernier mot).
-     * @return array{alloc: array<int, ?Section>, cancelled: bool, overrides: SlotOverride[], changed: array<int, true>}
+     * alloc : pour chaque ligne, la liste des sections (vide = libre).
+     * @return array{alloc: array<int, Section[]>, cancelled: bool, overrides: SlotOverride[], changed: array<int, true>}
      */
     public function planFor(ClubSlot $slot, string $ymd, ?SlotOverride $exclude = null): array
     {
         $alloc = [];
-        foreach ($slot->getAllocations() as $a) $alloc[$a->getLane()->getId()] = $a->getSection();
+        foreach ($slot->getAllocations() as $a) $alloc[$a->getLane()->getId()][] = $a->getSection();
         $matching = array_filter($slot->getOverrides()->getValues(), fn (SlotOverride $o) => $o !== $exclude && $o->matches($ymd));
         usort($matching, fn (SlotOverride $a, SlotOverride $b) => [$a->getKind() === SlotOverride::DATE, $a->getId()] <=> [$b->getKind() === SlotOverride::DATE, $b->getId()]);
         $cancelled = false;
         $changed = [];
         foreach ($matching as $o) {
             if ($o->isCancelled()) $cancelled = true;
-            foreach ($o->getAllocations() as $a) {
-                $alloc[$a->getLane()->getId()] = $a->getSection();
-                $changed[$a->getLane()->getId()] = true;
+            foreach (self::lanesOfOverride($o) as $laneId => $sections) {
+                $alloc[$laneId] = $sections; // l'exception remplace entièrement la ligne
+                $changed[$laneId] = true;
             }
         }
         return ['alloc' => $alloc, 'cancelled' => $cancelled, 'overrides' => array_values($matching), 'changed' => $changed];
     }
 
-    /** Section à qui la ligne est attribuée sur cette occurrence (null = libre). */
-    public function allocationFor(array $occurrence, Lane $lane): ?Section
+    /** Lignes d'une exception et leurs sections (vide = libérée). @return array<int, Section[]> */
+    private static function lanesOfOverride(SlotOverride $o): array
     {
-        return $occurrence['plan']['alloc'][$lane->getId()] ?? null;
+        $out = [];
+        foreach ($o->getAllocations() as $a) {
+            $out[$a->getLane()->getId()] ??= [];
+            if ($a->getSection()) $out[$a->getLane()->getId()][] = $a->getSection();
+        }
+        return $out;
+    }
+
+    /** Sections qui occupent la ligne sur cette occurrence (vide = libre). @return Section[] */
+    public function sectionsFor(array $occurrence, Lane $lane): array
+    {
+        return $occurrence['plan']['alloc'][$lane->getId()] ?? [];
+    }
+
+    /** Ajoute à une exception les rangées d'une ligne (une par section, ou une « libre »). @param Section[] $sections */
+    private static function addLane(SlotOverride $o, Lane $lane, array $sections): void
+    {
+        if (!$sections) $o->addAllocation((new OverrideAllocation())->setLane($lane)->setSection(null));
+        foreach ($sections as $section) $o->addAllocation((new OverrideAllocation())->setLane($lane)->setSection($section));
     }
 
     /**
@@ -227,15 +274,15 @@ final class SlotService
             if (array_key_exists('validUntil', $d)) $o->setValidUntil($date('validUntil'));
         }
         if (array_key_exists('allocations', $d)) {
-            if (!is_array($d['allocations'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionId":2|null}]');
-            $o->clearAllocations();
-            $this->em->flush(); // supprime les anciennes lignes avant d'insérer (contrainte d'unicité)
+            if (!is_array($d['allocations'])) throw new BadRequestHttpException('Format : [{"laneId":1,"sectionIds":[2,3]}] (liste vide = libérée)');
+            $wanted = [];
             foreach ($d['allocations'] as $it) {
-                $lane = $this->em->find(Lane::class, $it['laneId'] ?? 0) ?? throw new BadRequestHttpException('Ligne introuvable');
-                if (!$this->isLaneAvailable($slot, $lane)) throw new BadRequestHttpException(sprintf('%s (%s) n\'est pas ouverte sur ce créneau', $lane->getName(), $lane->getPool()->getName()));
-                $section = empty($it['sectionId']) ? null : ($this->em->find(Section::class, $it['sectionId']) ?? throw new BadRequestHttpException('Section introuvable'));
-                $o->addAllocation((new OverrideAllocation())->setLane($lane)->setSection($section));
+                $lane = $this->openLane($slot, $it['laneId'] ?? null);
+                $wanted[$lane->getId()] = [$lane, $this->sectionsOf($it)];
             }
+            $o->clearAllocations();
+            $this->em->flush(); // supprime les anciennes rangées avant d'insérer (contrainte d'unicité)
+            foreach ($wanted as [$lane, $sections]) self::addLane($o, $lane, $sections);
         }
         if (!$o->isCancelled() && $o->getAllocations()->isEmpty()) {
             throw new BadRequestHttpException('Indiquez au moins une ligne à modifier, ou cochez « créneau annulé »');
@@ -247,7 +294,7 @@ final class SlotService
      * Modification ponctuelle d'une date : fusionne les choix dans l'exception « date » de ce jour
      * (créée au besoin). Une ligne remise comme dans le plan sans exception date est retirée ;
      * une exception devenue vide est supprimée.
-     * @param list<array{laneId:int, sectionId:int|null|string}> $items sectionId : id, null (libre) ou "same" (plan sans modification ponctuelle)
+     * @param list<array{laneId:int, sectionIds?:int[]|string, sectionId?:int|null|string}> $items sections (vide = libre) ou "same" (plan sans modification ponctuelle)
      */
     public function editDate(ClubSlot $slot, string $ymd, array $items, ?bool $cancelled): ?SlotOverride
     {
@@ -264,22 +311,17 @@ final class SlotService
         if ($cancelled !== null) $o->setCancelled($cancelled);
         // plan de ce jour sans cette exception : sert à savoir si un choix est redevenu « normal »
         $without = $this->planFor($slot, $ymd, $o);
-        $current = [];
-        foreach ($o->getAllocations() as $a) $current[$a->getLane()->getId()] = $a->getSection();
+        $current = self::lanesOfOverride($o);
         foreach ($items as $it) {
-            $lane = $this->em->find(Lane::class, $it['laneId'] ?? 0) ?? throw new BadRequestHttpException('Ligne introuvable');
-            if (!$this->isLaneAvailable($slot, $lane)) throw new BadRequestHttpException(sprintf('%s n\'est pas ouverte sur ce créneau', $lane->getName()));
-            $v = $it['sectionId'] ?? null;
-            $section = ($v === null || $v === 'same') ? null : ($this->em->find(Section::class, $v) ?? throw new BadRequestHttpException('Section introuvable'));
-            $normal = $without['alloc'][$lane->getId()] ?? null;
-            if ($v === 'same' || $section?->getId() === $normal?->getId()) unset($current[$lane->getId()]);
-            else $current[$lane->getId()] = $section;
+            $lane = $this->openLane($slot, $it['laneId'] ?? null);
+            $sections = $this->sectionsOf($it, true);
+            $normal = $without['alloc'][$lane->getId()] ?? [];
+            if ($sections === 'same' || self::key($sections) === self::key($normal)) unset($current[$lane->getId()]);
+            else $current[$lane->getId()] = $sections;
         }
         $o->clearAllocations();
         $this->em->flush();
-        foreach ($current as $laneId => $section) {
-            $o->addAllocation((new OverrideAllocation())->setLane($this->em->find(Lane::class, $laneId))->setSection($section));
-        }
+        foreach ($current as $laneId => $sections) self::addLane($o, $this->em->find(Lane::class, $laneId), $sections);
         if (!$o->isCancelled() && $o->getAllocations()->isEmpty()) {
             $slot->removeOverride($o);
             $this->em->flush();

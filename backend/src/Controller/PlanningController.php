@@ -40,10 +40,10 @@ class PlanningController extends ApiController
             $ymd = $o['start']->format('Y-m-d');
             $lanes = [];
             foreach ($o['lanes'] as $lane) {
-                $owner = $slots->allocationFor($o, $lane);
                 $lanes[] = [
                     'laneId' => $lane->getId(), 'lane' => $lane->getName(), 'poolId' => $lane->getPool()->getId(), 'pool' => $lane->getPool()->getName(),
-                    'section' => $owner ? ['id' => $owner->getId(), 'name' => $owner->getName(), 'color' => $owner->getColor(), 'mine' => in_array($owner->getId(), $mine, true)] : null,
+                    // une ligne peut être partagée entre plusieurs sections (liste vide = libre)
+                    'sections' => array_map(fn ($s) => ['id' => $s->getId(), 'name' => $s->getName(), 'color' => $s->getColor(), 'mine' => in_array($s->getId(), $mine, true)], $slots->sectionsFor($o, $lane)),
                     'exception' => isset($o['plan']['changed'][$lane->getId()]),
                 ];
             }

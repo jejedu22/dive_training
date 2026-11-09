@@ -52,9 +52,9 @@ class PlanningTest extends ApiTestCase
         $this->assertSame(['aucun'], $this->lanesOf('2027-02-09'), 'pas de créneau le mardi');
 
         // « mine » : sections encadrées par l'utilisateur
-        $this->assertTrue($occ[0]['lanes'][0]['section']['mine']);
+        $this->assertTrue($occ[0]['lanes'][0]['sections'][0]['mine']);
         $inst2 = $this->login('inst2@x.fr');
-        $this->assertFalse($this->planningOf('2027-02-08', $inst2)[0]['lanes'][0]['section']['mine']);
+        $this->assertFalse($this->planningOf('2027-02-08', $inst2)[0]['lanes'][0]['sections'][0]['mine']);
     }
 
     public function testMonthlyRuleAndDateExceptions(): void
@@ -142,5 +142,46 @@ class PlanningTest extends ApiTestCase
         $this->assertSame([], $this->planningOf('2027-02-15')[0]['tanks']);
         $this->call('PUT', '/api/presences', ['usesTank' => false] + $body, $this->inst);
         $this->assertSame([(string) $this->sec['N1'] => 1], $this->planningOf('2027-02-08')[0]['tanks']);
+    }
+
+    public function testTwoSectionsOnTheSameLane(): void
+    {
+        // plan habituel : L1 partagée entre N1 et l'Apnée
+        [$code] = $this->call('PUT', "/api/slots/{$this->slot}/allocations", ['allocations' => [
+            ['laneId' => $this->lanes[0], 'sectionIds' => [$this->sec['N1'], $this->sec['Apnée']]],
+            ['laneId' => $this->lanes[1], 'sectionIds' => [$this->sec['N1']]],
+            ['laneId' => $this->lanes[2], 'sectionIds' => []]]], $this->ref);
+        $this->assertSame(200, $code);
+        $this->assertSame(['N1+Apnée', 'N1', 'libre'], $this->lanesOf('2027-02-08'));
+        [, $slots] = $this->call('GET', '/api/slots', null, $this->inst);
+        $this->assertCount(3, $slots[0]['allocations'], 'une rangée par section');
+        $this->assertSame(400, $this->call('PUT', "/api/slots/{$this->slot}/allocations", ['allocations' => [
+            ['laneId' => $this->lanes[0], 'sectionIds' => array_values($this->sec) + [3 => 999]]]], $this->ref)[0], 'au plus 3 sections');
+
+        // « mine » si l'une des sections de la ligne est à moi ; inst2 encadre l'Apnée
+        $inst2 = $this->login('inst2@x.fr');
+        [, $users] = $this->call('GET', '/api/instructors', null, $this->ref);
+        $id2 = array_values(array_filter($users, fn ($u) => $u['name'] === 'inst2@x.fr'))[0]['id'];
+        $this->call('POST', "/api/sections/{$this->sec['Apnée']}/instructors", ['userId' => $id2], $this->ref);
+        $l1 = $this->planningOf('2027-02-08', $inst2)[0]['lanes'][0];
+        $this->assertSame([false, true], array_column($l1['sections'], 'mine'));
+
+        // règle mensuelle : le 1er lundi, L3 partagée N2 + Apnée
+        $this->override(['kind' => 'monthly', 'weekday' => 1, 'nth' => 1, 'allocations' => [['laneId' => $this->lanes[2], 'sectionIds' => [$this->sec['N2'], $this->sec['Apnée']]]]]);
+        $this->assertSame(['N1+Apnée', 'N1', 'N2+Apnée'], $this->lanesOf('2027-02-01'));
+
+        // modification ponctuelle : L2 partagée N1 + N2 ce lundi-là
+        $url = "/api/slots/{$this->slot}/dates/2027-02-15";
+        $this->call('PUT', $url, ['allocations' => [['laneId' => $this->lanes[1], 'sectionIds' => [$this->sec['N2'], $this->sec['N1']]]]], $this->ref);
+        $this->assertSame(['N1+Apnée', 'N1+N2', 'libre'], $this->lanesOf('2027-02-15'));
+        // L1 remise « Apnée + N1 » (même partage, autre ordre) : identique au plan, rien n'est enregistré pour elle
+        $this->call('PUT', $url, ['allocations' => [['laneId' => $this->lanes[0], 'sectionIds' => [$this->sec['Apnée'], $this->sec['N1']]]]], $this->ref);
+        [, $slots] = $this->call('GET', '/api/slots', null, $this->ref);
+        $punctual = array_values(array_filter($slots[0]['overrides'], fn ($o) => $o['kind'] === 'date'))[0];
+        $this->assertSame([$this->lanes[1]], array_values(array_unique(array_column($punctual['allocations'], 'laneId'))));
+        // retirer une des deux sections de L1 ce jour-là
+        $this->call('PUT', $url, ['allocations' => [['laneId' => $this->lanes[0], 'sectionIds' => [$this->sec['Apnée']]]]], $this->ref);
+        $this->assertSame(['Apnée', 'N1+N2', 'libre'], $this->lanesOf('2027-02-15'));
+        $this->assertSame(['N1+Apnée', 'N1', 'libre'], $this->lanesOf('2027-02-22'), 'les autres lundis gardent le plan habituel');
     }
 }

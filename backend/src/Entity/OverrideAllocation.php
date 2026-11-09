@@ -3,9 +3,9 @@ namespace App\Entity;
 
 use Doctrine\ORM\Mapping as ORM;
 
-/** Dans une exception : la ligne est attribuée à la section, ou libérée (section null). */
+/** Dans une exception : la ligne est attribuée à une ou plusieurs sections (une rangée par section), ou libérée (une rangée, section null). */
 #[ORM\Entity]
-#[ORM\UniqueConstraint(columns: ['override_id', 'lane_id'])]
+#[ORM\UniqueConstraint(columns: ['override_id', 'lane_id', 'section_id'])]
 class OverrideAllocation
 {
     #[ORM\Id, ORM\GeneratedValue, ORM\Column]

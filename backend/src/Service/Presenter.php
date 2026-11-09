@@ -71,8 +71,8 @@ final class Presenter
     public static function occurrence(array $o): array
     {
         $allocations = [];
-        foreach ($o['plan']['alloc'] as $laneId => $section) {
-            if ($section) $allocations[] = ['laneId' => $laneId, 'sectionId' => $section->getId(), 'section' => $section->getName(), 'color' => $section->getColor()];
+        foreach ($o['plan']['alloc'] as $laneId => $sections) {
+            foreach ($sections as $section) $allocations[] = ['laneId' => $laneId, 'sectionId' => $section->getId(), 'section' => $section->getName(), 'color' => $section->getColor()];
         }
         return [
             'slotId' => $o['slot']->getId(), 'label' => $o['slot']->getLabel() ?? 'Créneau club',

@@ -93,11 +93,6 @@ class ClubSlot
     public function getAllocations(): Collection { return $this->allocations; }
     public function addAllocation(SlotAllocation $a): static { $this->allocations->add($a); $a->setSlot($this); return $this; }
     public function removeAllocation(SlotAllocation $a): static { $this->allocations->removeElement($a); return $this; }
-    public function allocationFor(Lane $lane): ?SlotAllocation
-    {
-        foreach ($this->allocations as $a) if ($a->getLane()->getId() === $lane->getId()) return $a;
-        return null;
-    }
 
     /** Libellé lisible : « Lundi, mercredi 20:00–22:00 ». */
     public function describe(): string

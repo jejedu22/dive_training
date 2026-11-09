@@ -5,10 +5,11 @@ use Doctrine\ORM\Mapping as ORM;
 
 /**
  * Plan d'occupation récurrent : sur un créneau du club, telle ligne d'eau est attribuée à telle section
+ * (une ligne peut être partagée : une rangée par section)
  * (ex. lundi 20h–22h : Fosse/Ligne 1 → Niveau 1). S'applique à chaque occurrence du créneau.
  */
 #[ORM\Entity]
-#[ORM\UniqueConstraint(columns: ['slot_id', 'lane_id'])]
+#[ORM\UniqueConstraint(columns: ['slot_id', 'lane_id', 'section_id'])]
 class SlotAllocation
 {
     #[ORM\Id, ORM\GeneratedValue, ORM\Column]
