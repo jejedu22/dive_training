@@ -7,6 +7,7 @@ import { useToast } from '../stores/toast'
 import { WEEKDAYS, dateFr } from '../format'
 import type { ClubSlot, Override, Pool, Section } from '../types'
 import OverrideEditor from '../components/OverrideEditor.vue'
+import LaneSectionsPicker from '../components/LaneSectionsPicker.vue'
 import { chipStyle, tint } from '../colors'
 
 const auth = useAuth(), toast = useToast()
@@ -19,7 +20,7 @@ const form = ref(empty())
 const showForm = ref(false)
 const formError = ref('')
 /** Plan d'occupation en cours d'édition : slotId -> { laneId: sectionId } */
-const plans = ref<Record<number, Record<number, number>>>({})
+const plans = ref<Record<number, Record<number, number[]>>>({}) // slotId -> laneId -> sections (vide = libre)
 
 const allLaneIds = computed(() => pools.value.flatMap((p) => p.lanes.map((l) => l.id)))
 const laneName = (id: number) => {
@@ -30,7 +31,7 @@ const laneName = (id: number) => {
 async function load() {
   try {
     ;[slots.value, pools.value, sections.value] = await Promise.all([get<ClubSlot[]>('/slots'), get<Pool[]>('/pools'), get<Section[]>('/sections')])
-    plans.value = Object.fromEntries(slots.value.map((s) => [s.id, Object.fromEntries(s.allocations.map((a) => [a.laneId, a.sectionId]))]))
+    plans.value = Object.fromEntries(slots.value.map((s) => [s.id, Object.fromEntries(s.availableLaneIds.map((id) => [id, savedOf(s, id)]))]))
   } catch (e) {
     toast.error(e)
   }
@@ -89,20 +90,22 @@ async function remove(s: ClubSlot) {
     toast.error(e)
   }
 }
+/** Sections enregistrées d'une ligne dans le plan habituel. */
+const savedOf = (s: ClubSlot, laneId: number) => s.allocations.filter((a) => a.laneId === laneId).map((a) => a.sectionId)
 async function savePlan(s: ClubSlot) {
   const plan = plans.value[s.id] ?? {}
   try {
-    await put(`/slots/${s.id}/allocations`, { allocations: s.availableLaneIds.map((laneId) => ({ laneId, sectionId: plan[laneId] || null })) })
+    await put(`/slots/${s.id}/allocations`, { allocations: s.availableLaneIds.map((laneId) => ({ laneId, sectionIds: plan[laneId] ?? [] })) })
     toast.ok('Plan d\'occupation enregistré.')
     await load()
   } catch (e) {
     toast.error(e)
   }
 }
+const sameSet = (a: number[], b: number[]) => a.length === b.length && a.every((x) => b.includes(x))
 const planDirty = (s: ClubSlot) => {
   const plan = plans.value[s.id] ?? {}
-  const saved = Object.fromEntries(s.allocations.map((a) => [a.laneId, a.sectionId]))
-  return s.availableLaneIds.some((id) => (plan[id] || 0) !== (saved[id] || 0))
+  return s.availableLaneIds.some((id) => !sameSet(plan[id] ?? [], savedOf(s, id)))
 }
 /** Lignes ouvertes d'un créneau regroupées par bassin (pour l'affichage). */
 const lanesByPool = (s: ClubSlot) =>
@@ -133,9 +136,10 @@ function overrideSummary(o: Override) {
   for (const p of pools.value) {
     const groups = new Map<string, string[]>()
     for (const l of p.lanes) {
-      const a = o.allocations.find((x) => x.laneId === l.id)
-      if (!a) continue
-      const k = a.section ? `→ ${a.section}` : '→ libérée'
+      const rows = o.allocations.filter((x) => x.laneId === l.id)
+      if (!rows.length) continue
+      const names = rows.map((x) => x.section).filter(Boolean)
+      const k = names.length ? `→ ${names.join(' + ')}` : '→ libérée'
       if (!groups.has(k)) groups.set(k, [])
       groups.get(k)!.push(l.name)
     }
@@ -226,12 +230,10 @@ const validity = (s: ClubSlot) =>
           <div class="plan-pool">{{ g.pool.name }}</div>
           <div v-for="l in g.lanes" :key="l.id" class="plan-row">
             <span>{{ l.name }}</span>
-            <select v-if="auth.isReferent && plans[s.id]" v-model.number="plans[s.id][l.id]" :class="{ set: plans[s.id][l.id] }"
-              :style="sectionColor(plans[s.id][l.id]) ? { borderColor: sectionColor(plans[s.id][l.id]), background: tint(sectionColor(plans[s.id][l.id])!, 0.1), color: sectionColor(plans[s.id][l.id]) } : {}">
-              <option :value="undefined">Libre</option>
-              <option v-for="sec in sections" :key="sec.id" :value="sec.id">{{ sec.name }}</option>
-            </select>
-            <span v-else-if="s.allocations.find((a) => a.laneId === l.id)" class="chip" :style="chipStyle(s.allocations.find((a) => a.laneId === l.id)!.color)">{{ s.allocations.find((a) => a.laneId === l.id)!.section }}</span>
+            <LaneSectionsPicker v-if="auth.isReferent && plans[s.id]" v-model="plans[s.id][l.id]" :sections="sections" />
+            <span v-else-if="savedOf(s, l.id).length" class="row" style="gap:.25rem">
+              <span v-for="a in s.allocations.filter((x) => x.laneId === l.id)" :key="a.sectionId" class="chip" :style="chipStyle(a.color)">{{ a.section }}</span>
+            </span>
             <span v-else class="chip chip-free">Libre</span>
           </div>
         </template>

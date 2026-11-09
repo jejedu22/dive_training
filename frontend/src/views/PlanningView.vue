@@ -82,14 +82,14 @@ const columns = computed(() => {
   return pools
 })
 const laneCount = computed(() => columns.value.reduce((n, p) => n + p.lanes.length, 0))
-const isMine = (o: PlanningOccurrence) => o.lanes.some((l) => l.section?.mine)
+const isMine = (o: PlanningOccurrence) => o.lanes.some((l) => l.sections.some((x) => x.mine))
 const rows = computed(() => (data.value?.occurrences ?? []).filter((o) => !onlyMine.value || isMine(o)))
 const cell = (o: PlanningOccurrence, laneId: number) => o.lanes.find((l) => l.laneId === laneId) ?? null
 const isPast = (o: PlanningOccurrence) => new Date(o.end) < new Date()
 /** Sections présentes sur une occurrence (pour la colonne bouteilles). */
 const sectionsOf = (o: PlanningOccurrence) => {
-  const m = new Map<number, NonNullable<PlanningLane['section']>>()
-  for (const l of o.lanes) if (l.section) m.set(l.section.id, l.section)
+  const m = new Map<number, PlanningLane['sections'][number]>()
+  for (const l of o.lanes) for (const x of l.sections) m.set(x.id, x)
   return [...m.values()]
 }
 const legend = computed(() => {
@@ -97,12 +97,11 @@ const legend = computed(() => {
   for (const o of data.value?.occurrences ?? []) for (const s of sectionsOf(o)) m.set(s.id, s)
   return [...m.values()].sort((a, b) => a.name.localeCompare(b.name))
 })
-const cellStyle = (l: PlanningLane | null) => (l?.section ? { background: l.section.color, color: textOn(l.section.color) } : {})
 
 // ---------- mes accès
 const myAll = computed(() =>
   (data.value?.occurrences ?? []).filter((o) => !o.cancelled && !isPast(o) && isMine(o))
-    .map((o) => ({ o, lanes: o.lanes.filter((l) => l.section?.mine) })))
+    .map((o) => ({ o, lanes: o.lanes.filter((l) => l.sections.some((x) => x.mine)) })))
 const MY_MAX = 3 // les prochaines dates seulement : le tableau reste visible
 const myNext = computed(() => myAll.value.slice(0, MY_MAX))
 
@@ -113,25 +112,32 @@ function openTanks(o: PlanningOccurrence, s: { id: number; mine: boolean }) {
 }
 
 // ---------- modification ponctuelle (référents)
-const edit = ref({ open: false, o: null as PlanningOccurrence | null, lane: null as PlanningLane | null, value: '' as string, wholePool: false })
+const edit = ref({ open: false, o: null as PlanningOccurrence | null, lane: null as PlanningLane | null, mode: 'set' as 'set' | 'same', ids: [] as number[], wholePool: false })
+const MAX_SHARE = 2 // sections au plus sur une ligne
 function onCell(o: PlanningOccurrence, l: PlanningLane | null) {
   if (!l || o.cancelled) {
     if (auth.isReferent && o.cancelled) openEdit(o, null)
     return
   }
   if (auth.isReferent) openEdit(o, l)
-  else if (l.section) openTanks(o, l.section)
+  else if (l.sections.length) openTanks(o, l.sections.find((x) => x.mine) ?? l.sections[0]) // ma section d'abord
+}
+/** Coche / décoche une section dans la fenêtre (au plus MAX_SHARE). */
+function toggleSection(id: number) {
+  const e = edit.value
+  e.mode = 'set'
+  e.ids = e.ids.includes(id) ? e.ids.filter((x) => x !== id) : e.ids.length < MAX_SHARE ? [...e.ids, id] : [e.ids[1], id]
 }
 function openEdit(o: PlanningOccurrence, l: PlanningLane | null) {
-  edit.value = { open: true, o, lane: l, value: l?.section ? String(l.section.id) : 'free', wholePool: false }
+  edit.value = { open: true, o, lane: l, mode: 'set', ids: l?.sections.map((x) => x.id) ?? [], wholePool: false }
 }
 async function saveCell() {
-  const { o, lane, value, wholePool } = edit.value
+  const { o, lane, mode, ids, wholePool } = edit.value
   if (!o || !lane) return
   const lanes = wholePool ? o.lanes.filter((x) => x.poolId === lane.poolId) : [lane]
-  const sectionId = value === 'free' ? null : value === 'same' ? 'same' : Number(value)
+  const sectionIds = mode === 'same' ? 'same' : ids
   try {
-    await put(`/slots/${o.slotId}/dates/${o.date}`, { allocations: lanes.map((x) => ({ laneId: x.laneId, sectionId })) })
+    await put(`/slots/${o.slotId}/dates/${o.date}`, { allocations: lanes.map((x) => ({ laneId: x.laneId, sectionIds })) })
     toast.ok(`${dayShort(o.start)} : ${wholePool ? lane.pool : lane.lane} modifiée${wholePool ? '' : ''}.`)
     edit.value.open = false
     await load()
@@ -178,7 +184,7 @@ const editTitle = computed(() => {
     <div v-for="x in myNext" :key="x.o.date + x.o.slotId" class="mine-row">
       <span class="when">{{ dayShort(x.o.start) }} · {{ time(x.o.start) }}–{{ time(x.o.end) }}</span>
       <span class="row" style="gap:.3rem">
-        <span v-for="l in x.lanes" :key="l.laneId" class="chip" :style="chipStyle(l.section!.color)">{{ l.pool }} · {{ l.lane }}</span>
+        <span v-for="l in x.lanes" :key="l.laneId" class="chip" :style="chipStyle(l.sections.find((y) => y.mine)!.color)">{{ l.pool }} · {{ l.lane }}<template v-if="l.sections.length > 1"> (partagée)</template></span>
       </span>
       <span class="row" style="gap:.3rem">
         <button v-for="s in sectionsOf(x.o).filter((s) => s.mine)" :key="s.id" class="btn btn-secondary btn-sm" @click="openTanks(x.o, s)">
@@ -225,11 +231,14 @@ const editTitle = computed(() => {
           <td v-if="o.cancelled" :colspan="laneCount + 1" class="cancel-cell">Créneau annulé</td>
           <template v-else>
             <template v-for="p in columns" :key="'c' + p.poolId">
-              <td v-for="c in p.lanes" :key="c.laneId" class="cell" :class="{ closed: !cell(o, c.laneId), free: cell(o, c.laneId) && !cell(o, c.laneId)!.section, mine: cell(o, c.laneId)?.section?.mine, exc: cell(o, c.laneId)?.exception, clickable: auth.isReferent || !!cell(o, c.laneId)?.section }"
-                :style="cellStyle(cell(o, c.laneId))" :title="cell(o, c.laneId) ? `${c.lane} : ${cell(o, c.laneId)!.section?.name ?? 'libre'}${cell(o, c.laneId)!.exception ? ' (modifié ce jour-là)' : ''}` : `${c.lane} : fermée sur ce créneau`"
+              <td v-for="c in p.lanes" :key="c.laneId" class="cell"
+                :class="{ closed: !cell(o, c.laneId), free: cell(o, c.laneId) && !cell(o, c.laneId)!.sections.length, exc: cell(o, c.laneId)?.exception, clickable: auth.isReferent || !!cell(o, c.laneId)?.sections.length }"
+                :title="cell(o, c.laneId) ? `${c.lane} : ${cell(o, c.laneId)!.sections.map((x) => x.name).join(' + ') || 'libre'}${cell(o, c.laneId)!.exception ? ' (modifié ce jour-là)' : ''}` : `${c.lane} : fermée sur ce créneau`"
                 @click="onCell(o, cell(o, c.laneId))">
                 <template v-if="cell(o, c.laneId)">
-                  <span v-if="cell(o, c.laneId)!.section" class="name">{{ cell(o, c.laneId)!.section!.name }}</span>
+                  <div v-if="cell(o, c.laneId)!.sections.length" class="parts">
+                    <span v-for="x in cell(o, c.laneId)!.sections" :key="x.id" class="part" :class="{ own: x.mine }" :style="{ background: x.color, color: textOn(x.color) }"><span class="pn">{{ x.name }}</span></span>
+                  </div>
                   <span v-else class="name">libre</span>
                   <span v-if="cell(o, c.laneId)!.exception" class="mark">⚑</span>
                 </template>
@@ -255,14 +264,17 @@ const editTitle = computed(() => {
   <AppDialog v-model="edit.open" :title="editTitle">
     <template v-if="edit.o && edit.lane">
       <p class="muted small">Ce changement ne vaut que pour ce jour-là. Pour un changement régulier, modifiez le plan habituel ou ajoutez une règle dans <router-link to="/slots" @click="edit.open = false">Créneaux</router-link>.</p>
+      <p class="small" style="margin:0 0 .4rem">Choisissez une section, ou deux pour <strong>partager la ligne</strong>.</p>
       <div class="choices">
-        <label v-for="s in sections" :key="s.id" class="choice" :class="{ on: edit.value === String(s.id) }"
-          :style="edit.value === String(s.id) ? { background: s.color, color: textOn(s.color), borderColor: s.color } : { borderColor: tint(s.color, 0.5) }">
-          <input v-model="edit.value" type="radio" :value="String(s.id)" />{{ s.name }}
-        </label>
-        <label class="choice" :class="{ on: edit.value === 'free' }"><input v-model="edit.value" type="radio" value="free" />Libre</label>
-        <label v-if="edit.lane.exception" class="choice" :class="{ on: edit.value === 'same' }"><input v-model="edit.value" type="radio" value="same" />Comme d'habitude</label>
+        <button v-for="s in sections" :key="s.id" type="button" class="choice" :class="{ on: edit.mode === 'set' && edit.ids.includes(s.id) }"
+          :style="edit.mode === 'set' && edit.ids.includes(s.id) ? { background: s.color, color: textOn(s.color), borderColor: s.color } : { borderColor: tint(s.color, 0.5) }"
+          @click="toggleSection(s.id)">{{ s.name }}</button>
+        <button type="button" class="choice" :class="{ on: edit.mode === 'set' && !edit.ids.length }" @click="edit.mode = 'set'; edit.ids = []">Libre</button>
+        <button v-if="edit.lane.exception" type="button" class="choice" :class="{ on: edit.mode === 'same' }" @click="edit.mode = 'same'">Comme d'habitude</button>
       </div>
+      <p class="muted small" style="margin:.5rem 0 0">
+        {{ edit.mode === 'same' ? 'Retour au plan habituel.' : edit.ids.length ? `Ce jour-là : ${sections.filter((x) => edit.ids.includes(x.id)).map((x) => x.name).join(' + ')}` : 'Ce jour-là : ligne libre.' }}
+      </p>
       <label class="check" style="margin-top:.8rem"><input v-model="edit.wholePool" type="checkbox" /> Appliquer à tout le bassin « {{ edit.lane.pool }} » ce jour-là</label>
     </template>
     <p v-else-if="edit.o?.cancelled">Ce créneau est annulé ce jour-là.</p>
@@ -307,11 +319,16 @@ thead .sticky { z-index: 3; background: #f7f9fb }
 .when.clickable:hover { background: var(--primary-50) }
 .cell { height: 46px; min-width: 76px; text-align: center; vertical-align: middle; position: relative; font-weight: 600 }
 .cell .name { display: block; padding: 0 .3rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; margin: 0 auto }
+.parts { position: absolute; inset: 0; display: flex; flex-direction: column } /* ligne partagée : une section en haut, une en bas */
+.part { flex: 1; display: flex; align-items: center; min-width: 0; min-height: 0; padding: 0 .25rem; font-size: .74rem; line-height: 1.1 }
+.pn { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; text-align: center }
+.part + .part { border-top: 2px solid #fff }
+.parts .part:only-child { font-size: .85rem }
+.part.own { box-shadow: inset 0 0 0 3px rgba(255,255,255,.7) } /* mes sections */
 .cell.free { color: #9aa6b2; font-weight: 400; background: #fff }
 .cell.closed { background: repeating-linear-gradient(135deg, #f4f6f8 0 6px, #eceff3 6px 12px) }
-.cell.mine { box-shadow: inset 0 0 0 3px rgba(255,255,255,.75) }
 .cell.exc { outline: 2px dashed #e0a21a; outline-offset: -3px }
-.cell .mark { position: absolute; top: 1px; right: 3px; font-size: .7rem }
+.cell .mark { position: absolute; top: 1px; right: 3px; font-size: .7rem; z-index: 1 }
 .cell.clickable { cursor: pointer }
 .cell.clickable:hover { filter: brightness(.93) }
 .tanks { padding: .3rem .4rem !important; min-width: 120px }
@@ -327,9 +344,10 @@ tr.cancelled .when .d { text-decoration: line-through }
 .choices { display: flex; flex-wrap: wrap; gap: .4rem }
 .choice { border: 2px solid var(--line); border-radius: 8px; padding: .45rem .8rem; cursor: pointer; font-weight: 600; background: #fff }
 .choice.on { border-color: var(--primary); background: var(--primary-50) }
-.choice input { display: none }
+.choice { font: inherit }
 @media (max-width: 760px) {
   .when { min-width: 92px }
   .cell { min-width: 62px; height: 42px; font-size: .75rem }
+  .parts .part:only-child { font-size: .72rem }
 }
 </style>

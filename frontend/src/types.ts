@@ -36,7 +36,8 @@ export interface ExceptionRef { id: number; label: string | null; rule: string; 
 /** Planning : une occurrence de créneau à une date, avec la section de chaque ligne ouverte. */
 export interface PlanningLane {
   laneId: number; lane: string; poolId: number; pool: string
-  section: { id: number; name: string; color: string; mine: boolean } | null
+  /** Sections qui occupent la ligne (vide = libre ; 2 = ligne partagée). */
+  sections: { id: number; name: string; color: string; mine: boolean }[]
   exception: boolean
 }
 export interface PlanningOccurrence {

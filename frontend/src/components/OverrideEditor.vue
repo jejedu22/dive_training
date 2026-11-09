@@ -4,8 +4,8 @@ import AppDialog from './AppDialog.vue'
 import AppIcon from './AppIcon.vue'
 import { post, put } from '../api'
 import { useToast } from '../stores/toast'
-import { tint } from '../colors'
 import type { ClubSlot, Override, Pool, Section } from '../types'
+import LaneSectionsPicker from './LaneSectionsPicker.vue'
 
 /**
  * Création / modification d'une exception au plan d'occupation d'un créneau.
@@ -21,7 +21,7 @@ const NTH = [{ v: 1, l: '1er' }, { v: 2, l: '2e' }, { v: 3, l: '3e' }, { v: 4, l
 const UNCHANGED = 'same', FREE = 'free'
 
 const form = ref({ label: '', kind: 'monthly' as 'monthly' | 'date', nth: 1, weekday: 1, date: '', validFrom: '', validUntil: '', cancelled: false })
-const choice = ref<Record<number, string>>({}) // laneId -> 'same' | 'free' | sectionId
+const choice = ref<Record<number, number[] | 'same'>>({}) // laneId -> 'same' (inchangée) ou sections (vide = libérée)
 const error = ref('')
 const saving = ref(false)
 
@@ -34,21 +34,26 @@ watch(open, (o) => {
     ? { label: x.label ?? '', kind: x.kind, nth: x.nth ?? 1, weekday: x.weekday ?? props.slot.weekdays[0], date: x.date ?? '', validFrom: x.validFrom ?? '', validUntil: x.validUntil ?? '', cancelled: x.cancelled }
     : { label: '', kind: 'monthly', nth: 1, weekday: props.slot.weekdays[0], date: '', validFrom: '', validUntil: '', cancelled: false }
   choice.value = Object.fromEntries(props.slot.availableLaneIds.map((id) => {
-    const a = x?.allocations.find((y) => y.laneId === id)
-    return [id, !a ? UNCHANGED : a.sectionId === null ? FREE : String(a.sectionId)]
+    const rows = x?.allocations.filter((y) => y.laneId === id) ?? []
+    return [id, rows.length ? rows.map((r) => r.sectionId).filter((v): v is number => v !== null) : UNCHANGED]
   }))
 }, { immediate: true })
 
-const base = (laneId: number) => props.slot.allocations.find((a) => a.laneId === laneId)
+/** Plan habituel d'une ligne, pour l'option « Inchangée (…) ». */
+const baseLabel = (laneId: number) => {
+  const names = props.slot.allocations.filter((a) => a.laneId === laneId).map((a) => a.section)
+  return `Inchangée (${names.length ? names.join(' + ') : 'libre'})`
+}
 const lanesByPool = computed(() =>
   props.pools.map((p) => ({ pool: p, lanes: p.lanes.filter((l) => props.slot.availableLaneIds.includes(l.id)) })).filter((g) => g.lanes.length))
-const sectionColor = (v: string) => props.sections.find((s) => String(s.id) === v)?.color
 /** « Tout le bassin → » : applique un choix à toutes les lignes d'un bassin. */
 function setPool(p: Pool, v: string) {
   if (!v) return
-  for (const l of p.lanes) if (props.slot.availableLaneIds.includes(l.id)) choice.value[l.id] = v
+  for (const l of p.lanes) {
+    if (props.slot.availableLaneIds.includes(l.id)) choice.value[l.id] = v === UNCHANGED ? UNCHANGED : v === FREE ? [] : [Number(v)]
+  }
 }
-const changes = computed(() => Object.entries(choice.value).filter(([, v]) => v !== UNCHANGED))
+const changes = computed(() => Object.entries(choice.value).filter(([, v]) => v !== UNCHANGED) as [string, number[]][])
 const slotDays = computed(() => props.slot.weekdays.map((d) => ({ v: d, l: DAYS[d - 1] })))
 
 async function save() {
@@ -58,7 +63,7 @@ async function save() {
   const body = {
     label: f.label || null, kind: f.kind, cancelled: f.cancelled,
     ...(f.kind === 'date' ? { date: f.date } : { nth: f.nth, weekday: f.weekday, validFrom: f.validFrom || null, validUntil: f.validUntil || null }),
-    allocations: f.cancelled ? [] : changes.value.map(([laneId, v]) => ({ laneId: Number(laneId), sectionId: v === FREE ? null : Number(v) })),
+    allocations: f.cancelled ? [] : changes.value.map(([laneId, ids]) => ({ laneId: Number(laneId), sectionIds: ids })),
   }
   try {
     const r = props.override
@@ -113,12 +118,7 @@ async function save() {
           </div>
           <div v-for="l in g.lanes" :key="l.id" class="lane">
             <span>{{ l.name }}</span>
-            <select v-model="choice[l.id]" :class="{ changed: choice[l.id] !== UNCHANGED }"
-              :style="sectionColor(choice[l.id]) ? { borderColor: sectionColor(choice[l.id]), background: tint(sectionColor(choice[l.id])!, 0.1) } : {}">
-              <option :value="UNCHANGED">Inchangée ({{ base(l.id)?.section ?? 'libre' }})</option>
-              <option :value="FREE">Libérée</option>
-              <option v-for="s in sections" :key="s.id" :value="String(s.id)">→ {{ s.name }}</option>
-            </select>
+            <LaneSectionsPicker v-model="choice[l.id]" :sections="sections" :same-label="baseLabel(l.id)" />
           </div>
         </div>
       </div>
@@ -137,7 +137,6 @@ async function save() {
 .pool-head { display: flex; justify-content: space-between; align-items: center; gap: .5rem; margin-bottom: .3rem }
 .pool-head .all { font-size: .85rem; min-height: 32px; padding: .2rem .4rem }
 .lane { display: flex; justify-content: space-between; align-items: center; gap: .5rem; padding: .2rem 0 }
-.lane select { min-width: 200px; max-width: 65% }
-.lane select.changed { font-weight: 600 }
+
 .small { font-size: .85rem }
 </style>
