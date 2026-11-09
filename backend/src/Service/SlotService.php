@@ -31,11 +31,11 @@ final class SlotService
         return $this->em->getRepository(ClubSlot::class)->count([]) > 0;
     }
 
-    /** Toutes les lignes, triées par bassin puis par nom. @return Lane[] */
+    /** Toutes les lignes, triées par bassin puis dans l'ordre du bassin. @return Lane[] */
     public function allLanes(): array
     {
         $lanes = $this->em->getRepository(Lane::class)->findAll();
-        usort($lanes, fn (Lane $a, Lane $b) => [$a->getPool()->getName(), $a->getName()] <=> [$b->getPool()->getName(), $b->getName()]);
+        usort($lanes, fn (Lane $a, Lane $b) => [$a->getPool()->getName(), $a->getPosition(), $a->getId()] <=> [$b->getPool()->getName(), $b->getPosition(), $b->getId()]);
         return $lanes;
     }
 

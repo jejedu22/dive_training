@@ -23,7 +23,7 @@ final class Presenter
 
     public static function lane(Lane $l): array
     {
-        return ['id' => $l->getId(), 'name' => $l->getName(), 'maxDepth' => $l->getMaxDepth(), 'poolId' => $l->getPool()?->getId()];
+        return ['id' => $l->getId(), 'name' => $l->getName(), 'maxDepth' => $l->getMaxDepth(), 'position' => $l->getPosition(), 'poolId' => $l->getPool()?->getId()];
     }
 
     public static function pool(Pool $p): array

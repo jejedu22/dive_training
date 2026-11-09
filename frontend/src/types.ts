@@ -8,7 +8,7 @@ export interface User {
   sections?: { id: number; name: string; color: string }[]     // seulement dans la gestion des comptes
 }
 export interface Health { api: string; database: string; hasUsers: boolean | null; jwtKeys: string }
-export interface Lane { id: number; name: string; maxDepth: number | null; poolId: number }
+export interface Lane { id: number; name: string; maxDepth: number | null; position: number; poolId: number }
 export interface Pool { id: number; name: string; lanes: Lane[] }
 export interface Diver { id: number; firstName: string; lastName: string; level: string | null }
 export interface Section { id: number; name: string; targetLevel: string | null; season: string | null; color: string; instructors: User[]; divers: Diver[] }

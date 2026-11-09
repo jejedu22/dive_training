@@ -40,6 +40,8 @@ Menu **Créneaux** (référents) : les plages où le club dispose de la piscine,
 - **Séances** : une ligne attribuée à la section est **confirmée directement** ; une ligne libre attend la **validation d'un référent** ; une ligne fermée ou attribuée à une autre section est refusée. Un référent peut passer outre.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
+**Bassins** (référents) : bouton « Modifier » sur chaque bassin pour le renommer, renommer les lignes, indiquer leur profondeur, changer leur ordre, en ajouter ou en supprimer (refusé si la ligne a des réservations à venir), ou supprimer le bassin.
+
 **Couleurs** : chaque section a une couleur (attribuée automatiquement, modifiable dans **Sections → Gérer**), reprise sur le planning, la page Lignes d'eau et le plan d'occupation. Séance pleine = confirmée, rayée = en attente de validation.
 
 Page **Planning**, vue **Mois** : calendrier du mois avec les créneaux et les séances de chaque jour (couleur de la section, ⚠ hors créneau) ; un clic sur un jour ouvre la vue **Jour**. Vue **Jour** : uniquement les créneaux du club du jour (une frise par créneau avec ses lignes ouvertes et la section attribuée) ; les séances exceptionnelles hors créneau sont listées à part. Les flèches passent d'un jour de créneau au suivant.

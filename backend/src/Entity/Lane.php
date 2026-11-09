@@ -15,6 +15,9 @@ class Lane
     private string $name = '';
     #[ORM\Column(nullable: true)]
     private ?float $maxDepth = null;
+    /** Ordre d'affichage dans le bassin. */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $position = 0;
 
     public function getId(): ?int { return $this->id; }
     public function getPool(): ?Pool { return $this->pool; }
@@ -23,4 +26,6 @@ class Lane
     public function setName(string $n): static { $this->name = $n; return $this; }
     public function getMaxDepth(): ?float { return $this->maxDepth; }
     public function setMaxDepth(?float $d): static { $this->maxDepth = $d; return $this; }
+    public function getPosition(): int { return $this->position; }
+    public function setPosition(int $p): static { $this->position = $p; return $this; }
 }
