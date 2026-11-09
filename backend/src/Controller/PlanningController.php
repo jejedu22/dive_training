@@ -23,7 +23,7 @@ class PlanningController extends ApiController
     public function pdf(Request $req, PlanningService $planning, PlanningPdf $pdf): Response
     {
         [$from, $to] = $this->period($req);
-        return $pdf->response($planning->build($from, $to, null, false), (string) $req->query->get('title', 'Planning des lignes d\'eau'));
+        return $pdf->response($planning->build($from, $to, null, false), (string) $req->query->get('title', 'Planning des lignes d\'eau'), $from);
     }
 
     /** @return array{0: \DateTimeImmutable, 1: \DateTimeImmutable} */

@@ -10,8 +10,10 @@ final class PlanningPdf
 {
     public function __construct(private SlotService $slots) {}
 
-    public function response(array $planning, string $title, string $filename = 'planning-lignes-eau.pdf'): Response
+    /** $from : début de la période, pour nommer le fichier (planning-2026-12-01.pdf). */
+    public function response(array $planning, string $title, ?\DateTimeImmutable $from = null): Response
     {
+        $filename = 'planning-' . ($from ?? new \DateTimeImmutable())->setTimezone($this->slots->timezone())->format('Y-m-d') . '.pdf';
         return new Response($this->render($planning, $title), 200, [
             'Content-Type' => 'application/pdf',
             'Content-Disposition' => sprintf('attachment; filename="%s"', $filename),

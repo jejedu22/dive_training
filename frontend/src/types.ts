@@ -43,10 +43,11 @@ export interface PlanningLane {
 export interface PlanningOccurrence {
   slotId: number; label: string; date: string; start: string; end: string; cancelled: boolean
   lanes: PlanningLane[]; exceptions: ExceptionRef[]
-  tanks: Record<string, number> // sectionId -> nombre de bouteilles
+  tanks?: Record<string, number> // sectionId -> nombre de bouteilles (absent sur un lien de partage)
 }
 export interface Planning { mySectionIds: number[]; occurrences: PlanningOccurrence[] }
 export interface PresenceList {
   section: { id: number; name: string; color: string }; date: string; slotId: number
   divers: { diver: Diver; usesTank: boolean }[]; tankCount: number
 }
+export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null }

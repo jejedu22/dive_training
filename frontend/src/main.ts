@@ -12,6 +12,8 @@ const router = createRouter({
   scrollBehavior: () => ({ top: 0 }),
   routes: [
     { path: '/login', component: () => import('./views/LoginView.vue'), meta: { public: true, title: 'Connexion' } },
+    // planning partagé par lien : sans compte
+    { path: '/partage/:token', component: () => import('./views/PublicPlanningView.vue'), props: true, meta: { public: true, title: 'Planning partagé' } },
     { path: '/', component: { render: () => null } }, // redirigé vers la page d'accueil choisie (voir beforeEach)
     { path: '/planning', component: () => import('./views/PlanningView.vue'), meta: { title: 'Planning' } },
     { path: '/occupation', redirect: '/planning' }, // ancienne page « Lignes d'eau »

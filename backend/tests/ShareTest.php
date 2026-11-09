@@ -29,7 +29,7 @@ class ShareTest extends ApiTestCase
         $this->assertSame(200, $r->getStatusCode());
         $this->assertSame('application/pdf', $r->headers->get('Content-Type'));
         $this->assertStringStartsWith('%PDF-', $r->getContent());
-        $this->assertStringContainsString('attachment', $r->headers->get('Content-Disposition'));
+        $this->assertSame('attachment; filename="planning-2027-02-01.pdf"', $r->headers->get('Content-Disposition'));
         $this->assertSame(400, $this->raw('/api/planning/pdf?from=2027-01-01T00:00:00Z&to=2027-06-01T00:00:00Z', $this->inst)->getStatusCode(), '62 jours max');
 
         // contenu (HTML avant conversion)

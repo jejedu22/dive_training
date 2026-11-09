@@ -44,6 +44,8 @@ L'application sert à **planifier l'occupation des lignes d'eau** : pour chaque 
 - **Planning** (page d'accueil) : un tableau, une ligne par date de créneau, une colonne par ligne d'eau, la case à la couleur de la section ; vue **Semaine** ou **Mois** ; « Mes lignes » résume les prochaines dates de vos sections.
   - **Référent** : clic sur une case pour la changer **ce jour-là seulement** (une section, libre, ou « comme d'habitude » ; option « tout le bassin ») ; clic sur la date pour **annuler / rétablir** le créneau ce jour-là.
   - **Bouteilles** : clic sur une case de section (ou la colonne Bouteilles) : élèves de la section avec la case « bouteille » pour cette date. Modifiable par les encadrants de la section et les référents ; consultable par tous.
+- **Export PDF** : bouton « PDF » du planning (tous les comptes) : la semaine ou le mois affiché, en A4 paysage, aux couleurs des sections (un mois tient sur une page).
+- **Lien de partage** (référents, bouton « Partager ») : adresse publique `…/partage/<jeton>` pour consulter le planning **sans compte**, en lecture seule, sans élèves ni bouteilles, avec son propre bouton PDF. Nom et date d'expiration facultatifs ; « Révoquer » coupe l'accès immédiatement.
 - **Sections** : nom (renommable avec le crayon ✎, ainsi que le niveau visé et la saison), couleur, encadrants, élèves, et **« utilise des bouteilles »** (oui par défaut). Une section sans bouteilles (apnée, nage…) n'apparaît pas dans la colonne Bouteilles du planning.
 - Les heures sont celles du club (`APP_TIMEZONE`, Europe/Paris par défaut), heure d'été comprise.
 
@@ -79,4 +81,4 @@ Tests backend : `cd backend && vendor/bin/phpunit` (SQLite, règles de conflit e
 `POST /api/login_check` · `GET|PUT /api/me` · `GET|POST /api/pools`, `PUT|DELETE /api/pools/{id}`, `PUT|DELETE /api/lanes/{id}` ·
 `GET|POST /api/sections` (+ `/divers`, `/instructors`) · `GET|POST /api/divers` ·
 `GET|POST|PUT|DELETE /api/slots` · `PUT /api/slots/{id}/allocations` (plan habituel) · `POST /api/slots/{id}/overrides`, `PUT|DELETE /api/overrides/{id}` (exceptions) ·
-`PUT /api/slots/{id}/dates/{date}` (modification ponctuelle) · `GET /api/planning?from&to` · `GET|PUT /api/presences` (bouteilles).
+`PUT /api/slots/{id}/dates/{date}` (modification ponctuelle) · `GET /api/planning?from&to` · `GET /api/planning/pdf?from&to&title` · `GET|POST|DELETE /api/share-links` · `GET /api/public/{jeton}` (+ `/planning`, `/pdf`, sans compte) · `GET|PUT /api/presences` (bouteilles).

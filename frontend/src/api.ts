@@ -34,3 +34,18 @@ export const get = <T>(p: string) => api<T>('GET', p)
 export const post = <T>(p: string, b?: unknown) => api<T>('POST', p, b ?? {})
 export const put = <T>(p: string, b: unknown) => api<T>('PUT', p, b)
 export const del = <T>(p: string) => api<T>('DELETE', p)
+
+/** Télécharge un fichier de l'API (ex. PDF) avec le jeton de connexion. */
+export async function download(path: string, filename: string) {
+  const res = await fetch(`/api${path}`, { headers: getToken() ? { Authorization: `Bearer ${getToken()}` } : {} })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}))
+    throw new ApiError(res.status, data.message ?? `Erreur ${res.status}`)
+  }
+  const url = URL.createObjectURL(await res.blob())
+  const a = Object.assign(document.createElement('a'), { href: url, download: filename })
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}

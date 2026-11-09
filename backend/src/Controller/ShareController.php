@@ -70,7 +70,7 @@ class ShareController extends ApiController
     {
         $this->valid($token, $em, $slots);
         [$from, $to] = $this->period($req);
-        return $pdf->response($planning->build($from, $to, null, false), (string) $req->query->get('title', 'Planning des lignes d\'eau'));
+        return $pdf->response($planning->build($from, $to, null, false), (string) $req->query->get('title', 'Planning des lignes d\'eau'), $from);
     }
 
     private function valid(string $token, EntityManagerInterface $em, SlotService $slots): ShareLink
