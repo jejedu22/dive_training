@@ -35,7 +35,7 @@ docker compose exec backend php bin/console app:admin:reset vous@club.fr 'nouvea
 ## Le planning des lignes d'eau
 L'application sert à **planifier l'occupation des lignes d'eau** : pour chaque créneau du club et chaque date, quelle section occupe quelle ligne. Les encadrants voient ainsi à quoi leurs sections ont accès.
 
-- **Créneaux** (référents) : jours et horaires où le club a la piscine (ex. lundi et mercredi 20:00–22:00), lignes ouvertes au club, et **plan habituel** (ligne → section) valable à chaque occurrence.
+- **Créneaux** (référents) : jours et horaires où le club a la piscine (ex. lundi et mercredi 20:00–22:00), **bassins disponibles** (une case par bassin, puis les lignes à fermer si besoin), et **plan habituel** (ligne → section) valable à chaque occurrence.
 - **Ligne partagée** : une ligne peut être attribuée à **deux sections** (« + partager… » dans le plan habituel et les exceptions, ou deux sections cochées dans le planning). Dans le planning, la case montre les deux sections l'une au-dessus de l'autre.
 - **Exceptions** (référents, dans Créneaux) : pour certaines dates le plan change.
   - Règle **chaque mois** (1er, 2e, 3e, 4e ou dernier lundi…, période facultative) ou **date précise** (l'emporte sur une règle mensuelle).

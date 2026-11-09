@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\{Lane, Pool};
+use App\Entity\{ClubSlot, Lane, Pool};
 use App\Service\Presenter;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request};
@@ -56,7 +56,16 @@ class PoolController extends ApiController
     {
         $d = $this->body($req);
         $lane = (new Lane())->setName($this->name($d['name'] ?? ''))->setMaxDepth($this->depth($d['maxDepth'] ?? null));
+        $existing = $pool->getLanes()->getValues();
         $pool->addLane($lane);
+        // Créneaux où tout le bassin était ouvert : la nouvelle ligne y est ouverte aussi
+        if ($existing) {
+            foreach ($em->getRepository(ClubSlot::class)->findAll() as $slot) {
+                if ($slot->getLanes()->isEmpty()) continue; // « toutes les lignes » : déjà incluse
+                $open = array_map(fn (Lane $l) => $l->getId(), $slot->getLanes()->getValues());
+                if (!array_diff(array_map(fn (Lane $l) => $l->getId(), $existing), $open)) $slot->getLanes()->add($lane);
+            }
+        }
         $em->flush();
         return $this->json(Presenter::lane($lane), 201);
     }

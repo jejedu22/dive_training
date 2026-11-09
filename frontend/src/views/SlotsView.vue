@@ -15,7 +15,7 @@ const slots = ref<ClubSlot[]>([])
 const pools = ref<Pool[]>([])
 const sections = ref<Section[]>([])
 
-const empty = () => ({ id: 0, label: '', weekdays: [] as number[], startTime: '20:00', endTime: '22:00', allLanes: true, laneIds: [] as number[], validFrom: '', validUntil: '' })
+const empty = () => ({ id: 0, label: '', weekdays: [] as number[], startTime: '20:00', endTime: '22:00', laneIds: [] as number[], validFrom: '', validUntil: '' })
 const form = ref(empty())
 const showForm = ref(false)
 const formError = ref('')
@@ -39,36 +39,41 @@ async function load() {
 onMounted(load)
 
 function openNew() {
-  form.value = empty()
+  form.value = { ...empty(), laneIds: [...allLaneIds.value] } // par défaut : tous les bassins
   formError.value = ''
   showForm.value = true
 }
 function edit(s: ClubSlot) {
   form.value = {
     id: s.id, label: s.label ?? '', weekdays: [...s.weekdays], startTime: s.startTime, endTime: s.endTime,
-    allLanes: s.laneIds.length === 0 && s.poolId === null, laneIds: [...s.availableLaneIds],
+    laneIds: [...s.availableLaneIds],
     validFrom: s.validFrom ?? '', validUntil: s.validUntil ?? '',
   }
   formError.value = ''
   showForm.value = true
   setTimeout(() => document.getElementById('slot-form')?.scrollIntoView({ behavior: 'smooth' }))
 }
-function togglePool(p: Pool) {
+/** Bassin coché = toutes ses lignes ouvertes ; décoché = aucune. */
+function setPool(p: Pool, on: boolean) {
   const ids = p.lanes.map((l) => l.id)
-  const all = ids.every((id) => form.value.laneIds.includes(id))
-  form.value.laneIds = all ? form.value.laneIds.filter((id) => !ids.includes(id)) : [...new Set([...form.value.laneIds, ...ids])]
+  form.value.laneIds = on ? [...new Set([...form.value.laneIds, ...ids])] : form.value.laneIds.filter((id) => !ids.includes(id))
 }
+const openCount = (p: Pool, laneIds: number[]) => p.lanes.filter((l) => laneIds.includes(l.id)).length
+/** Bassins d'un créneau et leurs lignes ouvertes, pour la carte : « Fosse (4 lignes) · Grand bassin (2/4) ». */
+const poolsSummary = (s: ClubSlot) =>
+  pools.value.map((p) => ({ p, n: openCount(p, s.availableLaneIds) })).filter((x) => x.n)
+    .map(({ p, n }) => `${p.name} (${n === p.lanes.length ? `${n} ligne${n > 1 ? 's' : ''}` : `${n}/${p.lanes.length} lignes`})`).join(' · ')
 
 async function save() {
   formError.value = ''
   const f = form.value
-  if (!f.allLanes && !f.laneIds.length) {
-    formError.value = 'Cochez au moins une ligne d\'eau, ou choisissez « Toutes les lignes ».'
+  if (!f.laneIds.length) {
+    formError.value = 'Choisissez au moins un bassin disponible.'
     return
   }
   const body = {
     label: f.label, weekdays: f.weekdays, startTime: f.startTime, endTime: f.endTime, poolId: null,
-    laneIds: f.allLanes ? [] : f.laneIds, validFrom: f.validFrom || null, validUntil: f.validUntil || null,
+    laneIds: f.laneIds, validFrom: f.validFrom || null, validUntil: f.validUntil || null,
   }
   try {
     if (f.id) await put(`/slots/${f.id}`, body)
@@ -177,18 +182,22 @@ const validity = (s: ClubSlot) =>
       </div>
     </div>
     <div class="block">
-      <div class="block-title">Lignes d'eau ouvertes au club</div>
-      <div class="toggle-group">
-        <label class="toggle" :class="{ on: form.allLanes }"><input v-model="form.allLanes" type="radio" :value="true" />Toutes les lignes</label>
-        <label class="toggle" :class="{ on: !form.allLanes }"><input v-model="form.allLanes" type="radio" :value="false" @change="form.laneIds.length || (form.laneIds = [...allLaneIds])" />Choisir les lignes</label>
-      </div>
-      <div v-if="!form.allLanes" class="lane-choice">
-        <div v-for="p in pools" :key="p.id" class="lane-pick">
-          <button type="button" class="btn btn-ghost btn-sm pool-name" @click="togglePool(p)">{{ p.name }}</button>
-          <label v-for="l in p.lanes" :key="l.id" class="toggle" :class="{ on: form.laneIds.includes(l.id) }"><input v-model="form.laneIds" type="checkbox" :value="l.id" />{{ l.name }}</label>
+      <div class="block-title">Bassins disponibles</div>
+      <p v-if="!pools.length" class="muted">Aucun bassin : créez-les dans <router-link to="/pools">Bassins</router-link>.</p>
+      <div class="pools">
+        <div v-for="p in pools" :key="p.id" class="pool-card" :class="{ on: openCount(p, form.laneIds) > 0 }">
+          <label class="check pool-check">
+            <input type="checkbox" :checked="openCount(p, form.laneIds) > 0" :indeterminate.prop="openCount(p, form.laneIds) > 0 && openCount(p, form.laneIds) < p.lanes.length"
+              @change="setPool(p, ($event.target as HTMLInputElement).checked)" />
+            <strong>{{ p.name }}</strong>
+            <small class="muted">{{ openCount(p, form.laneIds) === p.lanes.length ? `${p.lanes.length} ligne${p.lanes.length > 1 ? 's' : ''}` : `${openCount(p, form.laneIds)}/${p.lanes.length} lignes` }}</small>
+          </label>
+          <div v-if="openCount(p, form.laneIds) > 0" class="lane-pick">
+            <label v-for="l in p.lanes" :key="l.id" class="toggle" :class="{ on: form.laneIds.includes(l.id) }"><input v-model="form.laneIds" type="checkbox" :value="l.id" />{{ l.name }}</label>
+          </div>
         </div>
-        <p v-if="!pools.length" class="muted">Aucun bassin : créez-les dans <router-link to="/pools">Bassins</router-link>.</p>
       </div>
+      <p class="muted small" style="margin:.4rem 0 0">Décochez une ligne pour la fermer sur ce créneau. Une ligne ajoutée plus tard à un bassin entièrement ouvert sera ouverte automatiquement.</p>
     </div>
     <div class="fields block">
       <label class="field">Valable à partir du<input v-model="form.validFrom" type="date" /></label>
@@ -216,6 +225,7 @@ const validity = (s: ClubSlot) =>
             <span v-for="d in s.weekdays" :key="d" class="chip chip-primary">{{ WEEKDAYS[d - 1] }}</span>
             <strong>{{ s.startTime }}–{{ s.endTime }}</strong> · <span>{{ validity(s) }}</span>
           </p>
+          <p class="muted small" style="margin:.3rem 0 0">Bassins : {{ poolsSummary(s) || 'aucun' }}</p>
         </div>
         <div v-if="auth.isReferent" class="row">
           <button class="btn btn-secondary btn-sm" @click="edit(s)"><AppIcon name="edit" :size="15" /> Modifier</button>
@@ -275,7 +285,12 @@ const validity = (s: ClubSlot) =>
 .form-card { margin-bottom: 1rem; border-color: var(--primary-100) }
 .block { margin-top: 1rem }
 .block-title { font-size: .88rem; color: var(--muted); font-weight: 600; margin-bottom: .45rem }
-.lane-choice { margin-top: .6rem; display: flex; flex-direction: column; gap: .35rem }
+.pools { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .6rem }
+.pool-card { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .75rem; background: #fff }
+.pool-card.on { border-color: var(--primary-100); background: var(--primary-50) }
+.pool-check { gap: .5rem }
+.pool-card .lane-pick { margin-top: .5rem }
+.small { font-size: .85rem }
 .lane-pick { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem }
 .pool-name { min-width: 120px; justify-content: flex-start; color: var(--text) }
 .plan { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: .35rem .9rem }

@@ -95,4 +95,21 @@ class PoolEditTest extends WebTestCase
         [, $pools] = $this->call('GET', '/api/pools', null, $this->ref);
         $this->assertSame([], $pools);
     }
+
+    public function testNewLaneOpensOnSlotsWhereTheWholePoolIsOpen(): void
+    {
+        $fosse = $this->pool(2);
+        $grand = $this->call('POST', '/api/pools', ['name' => 'Grand bassin', 'lanes' => [['name' => 'G1'], ['name' => 'G2']]], $this->ref)[1];
+        $F = array_column($fosse['lanes'], 'id');
+        $G = array_column($grand['lanes'], 'id');
+        // créneau : toute la fosse + seulement G1 du grand bassin
+        $slot = $this->call('POST', '/api/slots', ['weekdays' => [1], 'startTime' => '20:00', 'endTime' => '22:00', 'laneIds' => [...$F, $G[0]]], $this->ref)[1];
+        $f3 = $this->call('POST', "/api/pools/{$fosse['id']}/lanes", ['name' => 'Ligne 3'], $this->ref)[1]['id'];
+        $g3 = $this->call('POST', "/api/pools/{$grand['id']}/lanes", ['name' => 'G3'], $this->ref)[1]['id'];
+        [, $slots] = $this->call('GET', '/api/slots', null, $this->ref);
+        $open = $slots[0]['availableLaneIds'];
+        $this->assertContains($f3, $open, 'toute la fosse était ouverte');
+        $this->assertNotContains($g3, $open, 'le grand bassin ne l\'était qu\'en partie');
+        $this->assertSame($slot['id'], $slots[0]['id']);
+    }
 }
