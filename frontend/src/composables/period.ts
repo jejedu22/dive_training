@@ -2,7 +2,7 @@ import { computed, ref } from 'vue'
 import { addDays, mondayOf, today } from '../format'
 
 /** Période affichée du planning : semaine (lundi → dimanche) ou mois calendaire, avec navigation. */
-export function usePeriod(initial: 'week' | 'month' = 'week') {
+export function usePeriod(initial: 'week' | 'month' = 'month') {
   const mode = ref<'week' | 'month'>(initial)
   const anchor = ref(today())
 

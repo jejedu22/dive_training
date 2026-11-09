@@ -47,7 +47,7 @@ class AccountTest extends WebTestCase
         $t = $this->login('marie@club.fr');
         [$code, $me] = $this->call('GET', '/api/me', null, $t);
         $this->assertSame(200, $code);
-        $this->assertSame(['homePage' => 'planning', 'planningView' => 'week', 'onlyMine' => false], $me['preferences']);
+        $this->assertSame(['homePage' => 'planning', 'planningView' => 'month', 'onlyMine' => false], $me['preferences']);
         $this->assertMatchesRegularExpression('/^#[0-9a-f]{6}$/', $me['avatarColor']);
         $this->assertNotNull($me['createdAt']);
         $this->assertNotNull($me['lastLoginAt'], 'dernière connexion enregistrée');

@@ -160,8 +160,8 @@ onMounted(async () => {
           </div>
           <div class="field">Affichage du planning par défaut
             <div class="toggle-group">
-              <label class="toggle" :class="{ on: auth.prefs.planningView === 'week' }"><input type="radio" :checked="auth.prefs.planningView === 'week'" @change="setPref('planningView', 'week')" />Semaine</label>
               <label class="toggle" :class="{ on: auth.prefs.planningView === 'month' }"><input type="radio" :checked="auth.prefs.planningView === 'month'" @change="setPref('planningView', 'month')" />Mois</label>
+              <label class="toggle" :class="{ on: auth.prefs.planningView === 'week' }"><input type="radio" :checked="auth.prefs.planningView === 'week'" @change="setPref('planningView', 'week')" />Semaine</label>
             </div>
           </div>
           <label class="check"><input type="checkbox" :checked="auth.prefs.onlyMine" @change="setPref('onlyMine', ($event.target as HTMLInputElement).checked)" />

@@ -41,7 +41,7 @@ L'application sert à **planifier l'occupation des lignes d'eau** : pour chaque 
   - Règle **chaque mois** (1er, 2e, 3e, 4e ou dernier lundi…, période facultative) ou **date précise** (l'emporte sur une règle mensuelle).
   - Créneau **annulé** ce jour-là, ou lignes **réattribuées** / **libérées** (« Tout le bassin → » pour aller vite).
   - Exemple : « le 1er lundi de chaque mois, Fosse → Apnée ».
-- **Planning** (page d'accueil) : un tableau, une ligne par date de créneau, une colonne par ligne d'eau, la case à la couleur de la section ; vue **Semaine** ou **Mois** ; « Mes lignes » résume les prochaines dates de vos sections.
+- **Planning** (page d'accueil) : un tableau, une ligne par date de créneau, une colonne par ligne d'eau, la case à la couleur de la section ; vue **Mois** (par défaut, semaines séparées par un bandeau) ou **Semaine** ; « Mes lignes » résume les prochaines dates de vos sections.
   - **Référent** : clic sur une case pour la changer **ce jour-là seulement** (une section, libre, ou « comme d'habitude » ; option « tout le bassin ») ; clic sur la date pour **annuler / rétablir** le créneau ce jour-là.
   - **Bouteilles** : clic sur une case de section (ou la colonne Bouteilles) : élèves de la section avec la case « bouteille » pour cette date. Modifiable par les encadrants de la section et les référents ; consultable par tous.
 - **Export PDF** : bouton « PDF » du planning (tous les comptes) : la semaine ou le mois affiché, en A4 paysage, aux couleurs des sections (un mois tient sur une page).

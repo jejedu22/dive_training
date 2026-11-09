@@ -52,9 +52,24 @@ final class PlanningPdf
             foreach ($p['lanes'] as $name) $head2 .= sprintf('<th>%s</th>', $e($name));
         }
 
+        // semaines : un bandeau « Semaine du … au … » entre deux semaines (s'il y en a plusieurs)
+        $weekOf = fn (array $o) => (new \DateTimeImmutable($o['start']))->setTimezone($tz)->format('o-W');
+        $multiWeeks = count(array_unique(array_map($weekOf, $occs))) > 1;
+        $dm = new \IntlDateFormatter('fr_FR', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, $tz, null, 'd MMM');
+        $dd = new \IntlDateFormatter('fr_FR', \IntlDateFormatter::NONE, \IntlDateFormatter::NONE, $tz, null, 'd');
+        $currentWeek = null;
+
         $rows = '';
         foreach ($occs as $o) {
             $start = new \DateTimeImmutable($o['start']);
+            if ($multiWeeks && $weekOf($o) !== $currentWeek) {
+                $currentWeek = $weekOf($o);
+                $monday = $start->setTimezone($tz)->modify('monday this week');
+                $sunday = $monday->modify('+6 days');
+                // « Semaine du 7 au 13 déc. », ou « du 30 nov. au 6 déc. » à cheval sur deux mois
+                $first = $monday->format('Y-m') === $sunday->format('Y-m') ? $dd->format($monday) : $dm->format($monday);
+                $rows .= sprintf('<tr class="week"><td colspan="%d">Semaine du %s au %s</td></tr>', $laneCount + 1, $e($first), $e($dm->format($sunday)));
+            }
             $exc = $o['exceptions'] ? '<div class="exc">* ' . $e(implode(', ', array_map(fn ($x) => $x['label'] ?? 'modifié', $o['exceptions']))) . '</div>' : '';
             $rows .= sprintf('<tr><td class="when"><b>%s</b><br><span class="t">%s–%s</span>%s</td>', $e(ucfirst($fmt->format($start))), $time($o['start']), $time($o['end']), $exc);
             if ($o['cancelled']) {
@@ -93,29 +108,30 @@ final class PlanningPdf
 
         return <<<HTML
 <!doctype html><html lang="fr"><head><meta charset="utf-8"><style>
-@page { margin: 10mm 10mm }
+@page { margin: 8mm 10mm }
 body { font-family: 'DejaVu Sans', sans-serif; font-size: 8.5pt; color: #16212c }
-h1 { font-size: 15pt; margin: 0 0 2mm; color: #0b6aa8 }
-.sub { color: #5d6a78; margin: 0 0 4mm }
+h1 { font-size: 14pt; margin: 0 0 1mm; color: #0b6aa8 }
+.sub { color: #5d6a78; margin: 0 0 2.5mm }
 table { width: 100%; border-collapse: collapse; table-layout: fixed }
 thead { display: table-header-group }
 tr { page-break-inside: avoid }
 th, td { border: 0.6pt solid #cfd7df; text-align: center; vertical-align: middle; padding: 0 }
 th { background: #f2f5f8; color: #5d6a78; font-weight: bold; padding: 1.5mm 1mm; font-size: 7.5pt }
 th.pool { background: #e7f1f9; color: #08568a }
-td.when, th.when { width: 26mm; text-align: left; padding: .6mm 2mm; line-height: 1.15 }
+td.when, th.when { width: 26mm; text-align: left; padding: .4mm 2mm; line-height: 1.1 }
 td.when .t { color: #5d6a78; font-size: 7.5pt }
 td.when .exc { color: #8a6100; font-size: 6.5pt; margin-top: .5mm }
-td.sec { height: 7mm; font-weight: bold; font-size: 7.5pt; padding: 0 .8mm }
-td.shared { height: 7mm; padding: 0; vertical-align: top; font-weight: bold; font-size: 7pt }
+td.sec { height: 6.2mm; font-weight: bold; font-size: 7.5pt; padding: 0 .8mm }
+td.shared { height: 6.2mm; padding: 0; vertical-align: top; font-weight: bold; font-size: 7pt }
 td.shared .top { padding: .6mm .5mm; border-bottom: 0.8pt solid #fff }
 td.shared .bot { padding: .6mm .5mm }
-td.free { color: #9aa6b2; height: 7mm }
+td.free { color: #9aa6b2; height: 6.2mm }
 td.closed { background: #eceff3 }
 td.cancel { color: #c13030; font-weight: bold; background: #fdeeee }
 td.none { color: #5d6a78; padding: 6mm }
+tr.week td { background: #dbe8f3; color: #08568a; font-weight: bold; font-size: 6.8pt; text-align: left; padding: .4mm 2mm; border-top: 1.4pt solid #0b6aa8 }
 .mark { font-weight: bold; font-size: 7pt; margin-left: .8mm }
-.legend { margin-top: 4mm; font-size: 7.5pt; color: #5d6a78 }
+.legend { margin-top: 2.5mm; font-size: 7.5pt; color: #5d6a78 }
 .chip { padding: .6mm 2mm; border-radius: 2mm; font-weight: bold; margin-right: 1mm }
 </style></head><body>
 <h1>{$e($title)}</h1>

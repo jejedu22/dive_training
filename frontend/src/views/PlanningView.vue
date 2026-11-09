@@ -137,8 +137,8 @@ const editTitle = computed(() => {
     </div>
     <div class="row">
       <div class="seg" role="tablist" aria-label="Période">
-        <button role="tab" :aria-selected="mode === 'week'" :class="{ on: mode === 'week' }" @click="mode = 'week'">Semaine</button>
         <button role="tab" :aria-selected="mode === 'month'" :class="{ on: mode === 'month' }" @click="mode = 'month'">Mois</button>
+        <button role="tab" :aria-selected="mode === 'week'" :class="{ on: mode === 'week' }" @click="mode = 'week'">Semaine</button>
       </div>
       <button class="btn btn-secondary btn-icon" :title="mode === 'week' ? 'Semaine précédente' : 'Mois précédent'" @click="shift(-1)"><AppIcon name="left" /></button>
       <button class="btn btn-secondary" :disabled="isCurrent" @click="goToday">Aujourd'hui</button>

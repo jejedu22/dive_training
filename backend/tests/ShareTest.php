@@ -37,7 +37,7 @@ class ShareTest extends ApiTestCase
         $planning = static::getContainer()->get(\App\Service\PlanningService::class)
             ->build(new \DateTimeImmutable('2027-02-01T00:00:00+01:00'), new \DateTimeImmutable('2027-02-09T00:00:00+01:00'), null, false);
         $html = $pdf->html($planning, 'Février 2027');
-        foreach (['Février 2027', 'Lun. 1 févr.', 'Lun. 8 févr.', '20:00–22:00', 'Niveau 1', 'libre', 'Fosse'] as $needle) {
+        foreach (['Février 2027', 'Lun. 1 févr.', 'Lun. 8 févr.', '20:00–22:00', 'Niveau 1', 'libre', 'Fosse', 'Semaine du 1 au 7 févr.', 'Semaine du 8 au 14 févr.'] as $needle) {
             $this->assertStringContainsString($needle, $html, $needle);
         }
     }

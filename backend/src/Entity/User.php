@@ -40,7 +40,7 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     /** Préférences et valeurs autorisées (la première est la valeur par défaut). */
     public const PREFERENCES = [
         'homePage' => ['planning', 'sections'],
-        'planningView' => ['week', 'month'],
+        'planningView' => ['month', 'week'],
         'onlyMine' => [false, true],
     ];
     private const AVATAR_COLORS = ['#0b6aa8', '#1e8449', '#7d3c98', '#c0392b', '#d35400', '#0e8a96', '#3949ab', '#8d5524'];

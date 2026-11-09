@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
-import { dayShort, time } from '../format'
+import { addDays, dayShort, mondayOf, time } from '../format'
 import { chipStyle, textOn } from '../colors'
 import type { PlanningLane, PlanningOccurrence } from '../types'
 
@@ -30,6 +30,22 @@ const columns = computed(() => {
   return pools
 })
 const laneCount = computed(() => columns.value.reduce((n, p) => n + p.lanes.length, 0))
+/** Lignes regroupées par semaine (lundi → dimanche), pour séparer visuellement les semaines. */
+const weeks = computed(() => {
+  const out: { monday: string; label: string; items: PlanningOccurrence[] }[] = []
+  for (const o of props.occurrences) {
+    const monday = mondayOf(o.date)
+    if (out.at(-1)?.monday !== monday) out.push({ monday, label: weekLabel(monday), items: [] })
+    out.at(-1)!.items.push(o)
+  }
+  return out
+})
+function weekLabel(monday: string) {
+  const sunday = addDays(monday, 6)
+  const f = (d: string, month: boolean) => new Date(`${d}T12:00:00`).toLocaleDateString('fr-FR', month ? { day: 'numeric', month: 'short' } : { day: 'numeric' })
+  const sameMonth = monday.slice(0, 7) === sunday.slice(0, 7)
+  return `Semaine du ${f(monday, !sameMonth)} au ${f(sunday, true)}`
+}
 const cell = (o: PlanningOccurrence, laneId: number) => o.lanes.find((l) => l.laneId === laneId) ?? null
 const isPast = (o: PlanningOccurrence) => new Date(o.end) < new Date()
 const sectionsOf = (o: PlanningOccurrence) => {
@@ -62,7 +78,11 @@ const title = (c: { lane: string }, l: PlanningLane | null) =>
         </tr>
       </thead>
       <tbody>
-        <tr v-for="o in occurrences" :key="o.date + o.slotId" :class="{ past: isPast(o), cancelled: o.cancelled }">
+        <template v-for="w in weeks" :key="w.monday">
+        <tr v-if="weeks.length > 1" class="week-sep">
+          <th :colspan="1 + laneCount + (showTanks ? 1 : 0)"><span>{{ w.label }}</span></th>
+        </tr>
+        <tr v-for="o in w.items" :key="o.date + o.slotId" :class="{ past: isPast(o), cancelled: o.cancelled }">
           <th class="sticky when" :class="{ clickable: editable }" @click="editable && emit('date', o)">
             <span class="d">{{ dayShort(o.start) }}</span>
             <span class="t">{{ time(o.start) }}–{{ time(o.end) }}</span>
@@ -91,6 +111,7 @@ const title = (c: { lane: string }, l: PlanningLane | null) =>
             </td>
           </template>
         </tr>
+        </template>
       </tbody>
     </table>
   </div>
@@ -135,6 +156,9 @@ thead .sticky { z-index: 3; background: #f7f9fb }
 tr.past td, tr.past th.when { opacity: .55 }
 tr.cancelled .when .d { text-decoration: line-through }
 .cancel-cell { text-align: center; color: var(--ko); font-weight: 600; background: repeating-linear-gradient(135deg, #fff 0 8px, #fdeeee 8px 16px) }
+.week-sep th { background: var(--primary-50) !important; color: var(--primary-600); text-align: left; font-size: .78rem; font-weight: 700; padding: .3rem .6rem !important;
+  border-top: 2px solid var(--primary); text-transform: none; letter-spacing: 0 }
+.week-sep th span { position: sticky; left: .6rem } /* reste lisible quand le tableau défile horizontalement */
 .legend { font-size: .82rem; margin: .6rem 0 0; display: flex; flex-wrap: wrap; align-items: center; gap: .3rem .5rem }
 .sw { display: inline-block; width: 14px; height: 10px; border-radius: 3px; vertical-align: -1px; border: 1px solid var(--line) }
 .sw.free { background: #fff }

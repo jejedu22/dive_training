@@ -7,7 +7,7 @@ import type { Planning } from '../types'
 
 /** Planning partagé par lien : sans compte, en lecture seule. */
 const props = defineProps<{ token: string }>()
-const { mode, anchor, label, query, isCurrent, shift, goToday, pdfTitle, pdfName } = usePeriod('week')
+const { mode, anchor, label, query, isCurrent, shift, goToday, pdfTitle, pdfName } = usePeriod('month')
 const info = ref<{ label: string | null } | null>(null)
 const data = ref<Planning | null>(null)
 const error = ref('')
@@ -53,8 +53,8 @@ const pdfUrl = computed(() => `/api/public/${encodeURIComponent(props.token)}/pd
         </div>
         <div class="row">
           <div class="seg" role="tablist" aria-label="Période">
-            <button role="tab" :class="{ on: mode === 'week' }" @click="mode = 'week'">Semaine</button>
             <button role="tab" :class="{ on: mode === 'month' }" @click="mode = 'month'">Mois</button>
+            <button role="tab" :class="{ on: mode === 'week' }" @click="mode = 'week'">Semaine</button>
           </div>
           <button class="btn btn-secondary btn-icon" title="Précédent" @click="shift(-1)"><AppIcon name="left" /></button>
           <button class="btn btn-secondary" :disabled="isCurrent" @click="goToday">Aujourd'hui</button>
