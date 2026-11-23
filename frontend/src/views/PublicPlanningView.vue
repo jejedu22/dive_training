@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import PlanningTable from '../components/PlanningTable.vue'
 import { usePeriod } from '../composables/period'
@@ -11,12 +11,40 @@ const { mode, anchor, label, query, isCurrent, shift, goToday, pdfTitle, pdfName
 const info = ref<{ label: string | null } | null>(null)
 const data = ref<Planning | null>(null)
 const error = ref('')
+/** Lien protégé : code demandé (needCode), message d'erreur du dernier essai. */
+const needCode = ref(false)
+const codeInput = ref('')
+const codeError = ref('')
+const checking = ref(false)
+const downloading = ref(false)
 
-async function fetchJson<T>(path: string): Promise<T> {
-  const r = await fetch(`/api/public/${encodeURIComponent(props.token)}${path}`)
+// Le code reste dans l'onglet (sessionStorage) le temps de la visite, jamais dans l'adresse.
+const CODE_KEY = `share_code:${props.token}`
+const readCode = () => { try { return sessionStorage.getItem(CODE_KEY) ?? '' } catch { return '' } }
+const saveCode = (c: string) => { try { c ? sessionStorage.setItem(CODE_KEY, c) : sessionStorage.removeItem(CODE_KEY) } catch { /* navigation privée */ } }
+let code = readCode()
+
+class CodeError extends Error {}
+async function request(path: string): Promise<Response> {
+  const r = await fetch(`/api/public/${encodeURIComponent(props.token)}${path}`, { headers: code ? { 'X-Share-Code': code } : {}, cache: 'no-store' })
+  if (r.ok) return r
   const j = await r.json().catch(() => ({}))
-  if (!r.ok) throw new Error(j.message ?? `Erreur ${r.status}`)
-  return j as T
+  if (r.status === 401) throw new CodeError(code ? (j.message ?? 'Code d\'accès incorrect.') : '')
+  if (r.status === 429) throw new CodeError(j.message ?? 'Trop d\'essais, réessayez plus tard.')
+  throw new Error(j.message ?? `Erreur ${r.status}`)
+}
+const fetchJson = async <T,>(path: string) => (await request(path)).json() as Promise<T>
+
+function onError(e: unknown) {
+  if (e instanceof CodeError) {
+    saveCode('')
+    code = ''
+    info.value = null
+    needCode.value = true
+    codeError.value = e.message
+  } else {
+    error.value = (e as Error).message
+  }
 }
 let seq = 0
 async function load() {
@@ -25,25 +53,71 @@ async function load() {
     const r = await fetchJson<Planning>(`/planning?${query.value}`)
     if (s === seq) data.value = r
   } catch (e) {
-    error.value = (e as Error).message
+    onError(e)
   }
 }
-onMounted(async () => {
+async function open() {
   try {
     info.value = await fetchJson('')
+    needCode.value = false
+    codeError.value = ''
+    saveCode(code)
     document.title = `Planning des lignes d'eau${info.value?.label ? ` · ${info.value.label}` : ''}`
     await load()
   } catch (e) {
-    error.value = (e as Error).message
+    onError(e)
   }
+}
+async function submitCode() {
+  if (!codeInput.value.trim()) return
+  code = codeInput.value.trim()
+  checking.value = true
+  await open()
+  checking.value = false
+  if (!needCode.value) codeInput.value = ''
+}
+
+// Page privée : pas d'indexation par les moteurs de recherche, pas de fuite de l'adresse (Referer).
+const metas: HTMLMetaElement[] = []
+onMounted(() => {
+  for (const [name, content] of [['robots', 'noindex, nofollow'], ['referrer', 'no-referrer']]) {
+    metas.push(document.head.appendChild(Object.assign(document.createElement('meta'), { name, content })))
+  }
+  open()
 })
-watch([mode, anchor], load)
-const pdfUrl = computed(() => `/api/public/${encodeURIComponent(props.token)}/pdf?${query.value}&title=${encodeURIComponent(pdfTitle.value)}`)
+onUnmounted(() => metas.forEach((m) => m.remove()))
+watch([mode, anchor], () => info.value && load())
+
+async function downloadPdf() {
+  downloading.value = true
+  try {
+    const r = await request(`/pdf?${query.value}&title=${encodeURIComponent(pdfTitle.value)}`)
+    const url = URL.createObjectURL(await r.blob())
+    const a = Object.assign(document.createElement('a'), { href: url, download: pdfName.value })
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+  } catch (e) {
+    onError(e)
+  } finally {
+    downloading.value = false
+  }
+}
 </script>
 
 <template>
   <div class="public">
     <div v-if="error" class="card empty"><strong>Lien indisponible</strong>{{ error }}</div>
+    <form v-else-if="needCode" class="card lock" @submit.prevent="submitCode">
+      <p class="brand"><img src="/favicon.png" alt="" width="20" height="20" /> Dive Training</p>
+      <div class="lock-icon" aria-hidden="true">🔒</div>
+      <h1>Planning protégé</h1>
+      <p class="muted">Saisissez le code d'accès communiqué par le club.</p>
+      <input v-model="codeInput" class="code" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Code d'accès" placeholder="Code d'accès" autofocus />
+      <p v-if="codeError" class="err" role="alert">{{ codeError }}</p>
+      <button class="btn" :disabled="checking || !codeInput.trim()">{{ checking ? 'Vérification…' : 'Afficher le planning' }}</button>
+    </form>
     <template v-else-if="info">
       <div class="page-head">
         <div>
@@ -59,7 +133,7 @@ const pdfUrl = computed(() => `/api/public/${encodeURIComponent(props.token)}/pd
           <button class="btn btn-secondary btn-icon" title="Précédent" @click="shift(-1)"><AppIcon name="left" /></button>
           <button class="btn btn-secondary" :disabled="isCurrent" @click="goToday">Aujourd'hui</button>
           <button class="btn btn-secondary btn-icon" title="Suivant" @click="shift(1)"><AppIcon name="right" /></button>
-          <a class="btn btn-secondary" :href="pdfUrl" :download="pdfName"><AppIcon name="download" :size="16" /> PDF</a>
+          <button class="btn btn-secondary" :disabled="downloading" @click="downloadPdf"><AppIcon name="download" :size="16" /> PDF</button>
         </div>
       </div>
       <div v-if="data && !data.occurrences.length" class="card empty"><strong>Aucun créneau du club sur cette période</strong></div>
@@ -78,4 +152,11 @@ const pdfUrl = computed(() => `/api/public/${encodeURIComponent(props.token)}/pd
 .seg button.on { background: var(--primary); color: #fff }
 .small { font-size: .85rem }
 .foot { margin-top: 1rem; text-align: center }
+.lock { max-width: 380px; margin: 12vh auto 0; display: flex; flex-direction: column; align-items: center; gap: .6rem; text-align: center; padding: 1.5rem }
+.lock h1 { margin: 0; font-size: 1.3rem }
+.lock p { margin: 0 }
+.lock-icon { font-size: 2.2rem }
+.lock .code { width: 100%; text-align: center; font-size: 1.2rem; letter-spacing: .15em; padding: .6rem }
+.lock .btn { width: 100% }
+.err { color: #b42318; font-size: .9rem }
 </style>

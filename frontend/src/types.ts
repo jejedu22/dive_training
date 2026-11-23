@@ -50,4 +50,4 @@ export interface PresenceList {
   section: { id: number; name: string; color: string }; date: string; slotId: number
   divers: { diver: Diver; usesTank: boolean }[]; tankCount: number
 }
-export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null }
+export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null; hasCode: boolean }

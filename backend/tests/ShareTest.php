@@ -15,9 +15,11 @@ class ShareTest extends ApiTestCase
         $this->call('PUT', "/api/slots/{$this->slot}/allocations", ['allocations' => [['laneId' => $pool['lanes'][0]['id'], 'sectionIds' => [$n1]]]], $this->ref);
     }
 
-    private function raw(string $uri, ?string $token = null)
+    private function raw(string $uri, ?string $token = null, ?string $code = null)
     {
-        $this->client->request('GET', $uri, [], [], $token ? ['HTTP_AUTHORIZATION' => "Bearer $token"] : []);
+        $server = $token ? ['HTTP_AUTHORIZATION' => "Bearer $token"] : [];
+        if ($code !== null) $server['HTTP_X_SHARE_CODE'] = $code;
+        $this->client->request('GET', $uri, [], [], $server);
         return $this->client->getResponse();
     }
 
@@ -71,5 +73,44 @@ class ShareTest extends ApiTestCase
         $this->assertCount(2, $list);
         $this->assertSame(204, $this->call('DELETE', "/api/share-links/{$link['id']}", null, $this->ref)[0]);
         $this->assertSame(404, $this->call('GET', "/api/public/{$link['token']}")[0]);
+    }
+
+    public function testShareLinkWithAccessCode(): void
+    {
+        $this->assertSame(400, $this->call('POST', '/api/share-links', ['code' => '12'], $this->ref)[0], 'code trop court');
+        [$code, $link] = $this->call('POST', '/api/share-links', ['label' => 'Parents', 'code' => '2468'], $this->ref);
+        $this->assertSame(201, $code);
+        $this->assertTrue($link['hasCode']);
+        $this->assertArrayNotHasKey('code', $link);
+        $t = $link['token'];
+        $q = "/api/public/$t/planning?from=2027-02-08T00:00:00%2B01:00&to=2027-02-09T00:00:00%2B01:00";
+
+        // sans code, ou code faux : refusé ; le planning n'est pas divulgué
+        $r = $this->raw("/api/public/$t");
+        $this->assertSame(401, $r->getStatusCode());
+        $this->assertStringContainsString('protégé', json_decode($r->getContent(), true)['message']);
+        $this->assertSame(401, $this->raw($q, null, '0000')->getStatusCode());
+        $this->assertSame(401, $this->raw("/api/public/$t/pdf", null, '0000')->getStatusCode());
+        // bon code (en-tête X-Share-Code)
+        $r = $this->raw($q, null, '2468');
+        $this->assertSame(200, $r->getStatusCode());
+        $this->assertStringContainsString('no-store', $r->headers->get('Cache-Control'));
+        $this->assertSame('noindex, nofollow', $r->headers->get('X-Robots-Tag'));
+        $this->assertSame('%PDF-', substr($this->raw("/api/public/$t/pdf?from=2027-02-01T00:00:00Z&to=2027-03-01T00:00:00Z", null, '2468')->getContent(), 0, 5));
+
+        // 5 codes faux : lien bloqué, même avec le bon code
+        for ($i = 0; $i < 4; $i++) $this->assertSame(401, $this->raw("/api/public/$t", null, "x$i-faux")->getStatusCode());
+        $this->assertSame(429, $this->raw("/api/public/$t", null, 'encore-faux')->getStatusCode());
+        $r = $this->raw("/api/public/$t", null, '2468');
+        $this->assertSame(429, $r->getStatusCode());
+        $this->assertStringContainsString('15 min', json_decode($r->getContent(), true)['message']);
+
+        // le référent change le code (et débloque) puis le retire
+        $this->assertSame(403, $this->call('PUT', "/api/share-links/{$link['id']}", ['code' => '1357'], $this->inst)[0]);
+        $this->assertTrue($this->call('PUT', "/api/share-links/{$link['id']}", ['code' => '1357'], $this->ref)[1]['hasCode']);
+        $this->assertSame(401, $this->raw("/api/public/$t", null, '2468')->getStatusCode(), 'ancien code');
+        $this->assertSame(200, $this->raw("/api/public/$t", null, '1357')->getStatusCode());
+        $this->assertFalse($this->call('PUT', "/api/share-links/{$link['id']}", ['code' => null], $this->ref)[1]['hasCode']);
+        $this->assertSame(200, $this->raw("/api/public/$t")->getStatusCode());
     }
 }

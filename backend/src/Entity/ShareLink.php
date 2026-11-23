@@ -22,6 +22,18 @@ class ShareLink
     /** Dernier jour de validité (inclus) ; null = sans limite. */
     #[ORM\Column(type: Types::DATE_IMMUTABLE, nullable: true)]
     private ?\DateTimeImmutable $expiresAt = null;
+    /** Code d'accès (haché) demandé à l'ouverture du lien ; null = lien seul. */
+    #[ORM\Column(length: 255, nullable: true)]
+    private ?string $codeHash = null;
+    /** Codes erronés consécutifs : au-delà de MAX_ATTEMPTS, le lien est bloqué LOCK_MINUTES. */
+    #[ORM\Column(options: ['default' => 0])]
+    private int $failedAttempts = 0;
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lockedUntil = null;
+
+    public const CODE_MIN = 4;
+    public const MAX_ATTEMPTS = 5;
+    public const LOCK_MINUTES = 15;
 
     public function __construct()
     {
@@ -41,5 +53,33 @@ class ShareLink
     public function isValid(\DateTimeImmutable $today): bool
     {
         return !$this->expiresAt || $this->expiresAt->format('Y-m-d') >= $today->format('Y-m-d');
+    }
+
+    public function hasCode(): bool { return $this->codeHash !== null; }
+    public function setCode(?string $code): static
+    {
+        $this->codeHash = ($code !== null && $code !== '') ? password_hash($code, \PASSWORD_DEFAULT) : null;
+        $this->failedAttempts = 0;
+        $this->lockedUntil = null;
+        return $this;
+    }
+    public function isLocked(\DateTimeImmutable $now): bool { return $this->lockedUntil !== null && $this->lockedUntil > $now; }
+    public function getLockedUntil(): ?\DateTimeImmutable { return $this->lockedUntil; }
+    /** Vérifie le code ; compte les échecs et bloque le lien après MAX_ATTEMPTS. */
+    public function checkCode(?string $code, \DateTimeImmutable $now): bool
+    {
+        if ($this->codeHash === null) return true;
+        if ($code !== null && $code !== '' && password_verify($code, $this->codeHash)) {
+            $this->failedAttempts = 0;
+            $this->lockedUntil = null;
+            return true;
+        }
+        if ($code !== null && $code !== '') {
+            if (++$this->failedAttempts >= self::MAX_ATTEMPTS) {
+                $this->failedAttempts = 0;
+                $this->lockedUntil = $now->modify('+' . self::LOCK_MINUTES . ' minutes');
+            }
+        }
+        return false;
     }
 }
