@@ -53,7 +53,8 @@ export interface PresenceList {
   section: { id: number; name: string; color: string }; date: string; slotId: number
   divers: { diver: Diver; usesTank: boolean }[]; tankCount: number
 }
-export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null; hasCode: boolean }
+export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null; hasCode: boolean
+  openCount: number; lastOpenedAt: string | null; diverId: number | null }
 
 // ---------- Suivi des stagiaires (MFT FFESSM)
 export type SkillStatus = 'NT' | 'ECA' | 'A' | 'V'
@@ -80,13 +81,15 @@ export interface EnrolmentSummary {
   firstValidatedAt: string | null; deadline: string | null; issued: Record<string, { date: string; by: string }>
 }
 export interface Enrolment extends EnrolmentSummary {
-  prerequisites: { label: string; done: boolean }[]
+  /** Prérequis / attestations : date, qui a coché, note (ex. signataire). */
+  prerequisites: { label: string; done: boolean; date: string | null; by: string | null; note: string | null }[]
   competencies: { key: string; status: SkillStatus }[]
   /** Par élément : statut, dernière évaluation, raison qui empêche « Validé » (null = possible) selon le lieu. */
   skills: Record<string, { status: SkillStatus; last: EvaluationEntry | null; validate: { natural: string | null; pool: string | null } }>
   evaluations: EvaluationEntry[]
   qualifications: { code: string; label: string; issued: { date: string; by: string } | null; cannotIssue: string | null }[]
   // Formation Initiateur
+  complement?: { entries: ComplementEntry[]; theoryHours: number; dives: number; complete: boolean }
   modules?: ModuleState[]; dossier?: { stageInitial?: { date: string; ctr: string | null } }; canTutor?: boolean
 }
 export type Stamp = { date: string; by: string }
@@ -102,3 +105,12 @@ export interface ModuleState {
 export interface SectionRef { id: number; name: string; color: string }
 export interface TraineeSummary extends Diver { licence: string | null; archived: boolean; sections: SectionRef[]; enrolments: EnrolmentSummary[] }
 export interface Trainee extends Diver { licence: string | null; archived: boolean; sections: SectionRef[]; canEvaluate: boolean; enrolments: Enrolment[] }
+export type ComplementEntry =
+  | { type: 'theory'; date: string; place: string; by: string; hours: number }
+  | { type: 'dive'; date: string; place: string; by: string; depth: number; club: string | null }
+/** Tableau de section : stagiaires × compétences (ou modules). */
+export interface Board {
+  curriculum: string; columns: { key: string; title: string; group: string | null }[]
+  rows: { diverId: number; firstName: string; lastName: string; enrolmentId: number; progress: EnrolmentSummary['progress']; deadline: string | null
+    cells: { key: string; status: SkillStatus; detail: string | null }[]; issuable: string[] }[]
+}

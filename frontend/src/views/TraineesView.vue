@@ -81,7 +81,10 @@ async function create() {
       <h1>Stagiaires</h1>
       <p>Suivi des compétences selon le Manuel de Formation Technique de la FFESSM (N1, N2, N3).</p>
     </div>
-    <button v-if="mySections.length || auth.isReferent" class="btn" @click="openCreate"><AppIcon name="plus" /> Nouveau stagiaire</button>
+    <div class="row">
+      <router-link to="/stagiaires/tableau" class="btn btn-secondary"><AppIcon name="clipboard" :size="16" /> Tableau de section</router-link>
+      <button v-if="mySections.length || auth.isReferent" class="btn" @click="openCreate"><AppIcon name="plus" /> Nouveau stagiaire</button>
+    </div>
   </div>
 
   <div class="card filters">

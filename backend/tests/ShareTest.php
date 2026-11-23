@@ -53,7 +53,7 @@ class ShareTest extends ApiTestCase
         $this->assertSame('ref@x.fr', $link['createdBy']);
 
         // accès sans compte, en lecture seule, sans bouteilles ni « mine »
-        $this->assertSame(['label' => 'Piscine municipale', 'expiresAt' => null], $this->call('GET', "/api/public/{$link['token']}")[1]);
+        $this->assertSame(['label' => 'Piscine municipale', 'expiresAt' => null, 'kind' => 'planning', 'name' => null], $this->call('GET', "/api/public/{$link['token']}")[1]);
         [$code, $p] = $this->call('GET', "/api/public/{$link['token']}/planning?from=2027-02-08T00:00:00%2B01:00&to=2027-02-09T00:00:00%2B01:00");
         $this->assertSame(200, $code);
         $this->assertSame('Niveau 1', $p['occurrences'][0]['lanes'][0]['sections'][0]['name']);

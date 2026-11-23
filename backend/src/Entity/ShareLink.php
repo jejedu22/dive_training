@@ -31,6 +31,15 @@ class ShareLink
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lockedUntil = null;
 
+    /** Lien vers le livret d'un stagiaire (null = lien vers le planning). */
+    #[ORM\ManyToOne, ORM\JoinColumn(nullable: true, onDelete: 'CASCADE')]
+    private ?Diver $diver = null;
+    /** Consultations : dernière ouverture et nombre d'ouvertures. */
+    #[ORM\Column(nullable: true)]
+    private ?\DateTimeImmutable $lastOpenedAt = null;
+    #[ORM\Column(options: ['default' => 0])]
+    private int $openCount = 0;
+
     public const CODE_MIN = 4;
     public const MAX_ATTEMPTS = 5;
     public const LOCK_MINUTES = 15;
@@ -82,4 +91,9 @@ class ShareLink
         }
         return false;
     }
+    public function getDiver(): ?Diver { return $this->diver; }
+    public function setDiver(?Diver $d): static { $this->diver = $d; return $this; }
+    public function getLastOpenedAt(): ?\DateTimeImmutable { return $this->lastOpenedAt; }
+    public function getOpenCount(): int { return $this->openCount; }
+    public function markOpened(): void { $this->lastOpenedAt = new \DateTimeImmutable(); $this->openCount++; }
 }

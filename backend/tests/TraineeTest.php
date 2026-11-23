@@ -239,4 +239,80 @@ class TraineeTest extends ApiTestCase
         [$code, $f] = $this->call('POST', "/api/enrolments/$e/issue", ['qualification' => 'INIT', 'date' => '2026-11-20'], $this->ref);
         $this->assertSame([200, 'done'], [$code, $f['enrolments'][0]['status']]);
     }
+
+    public function testBoardPdfAndTraineeLink(): void
+    {
+        [, $t] = $this->call('POST', '/api/trainees', ['firstName' => 'Léa', 'lastName' => 'Martin', 'sectionId' => $this->section, 'curriculum' => 'N1'], $this->inst);
+        $e = $t['enrolments'][0]['id'];
+        $this->call('POST', "/api/enrolments/$e/evaluations", ['skills' => ['N1.ventiler.masque'], 'status' => 'A', 'place' => 'pool', 'comment' => 'Bien'], $this->inst);
+        $this->call('POST', '/api/trainees', ['firstName' => 'Zoé', 'lastName' => 'Autre', 'curriculum' => 'N2'], $this->ref);
+
+        // tableau de section
+        [$code, $b] = $this->call('GET', "/api/trainees/board?curriculum=N1&section={$this->section}", null, $this->inst);
+        $this->assertSame(200, $code);
+        $this->assertCount(11, $b['columns']);
+        $this->assertCount(1, $b['rows']);
+        $this->assertSame('ECA', $b['rows'][0]['cells'][4]['status']);
+        $this->assertCount(0, $this->call('GET', '/api/trainees/board?curriculum=N3', null, $this->inst)[1]['rows']);
+
+        // PDF de la fiche
+        $this->client->request('GET', "/api/trainees/{$t['id']}/pdf", [], [], ['HTTP_AUTHORIZATION' => "Bearer {$this->inst}"]);
+        $r = $this->client->getResponse();
+        $this->assertSame('application/pdf', $r->headers->get('Content-Type'));
+        $this->assertSame('attachment; filename="livret-martin-lea.pdf"', $r->headers->get('Content-Disposition'));
+        $html = static::getContainer()->get(\App\Service\TraineePdf::class)->html(static::getContainer()->get(\App\Training\TrainingService::class)
+            ->publicFiche(static::getContainer()->get(EntityManagerInterface::class)->find(\App\Entity\Diver::class, $t['id'])));
+        foreach (['Fiche de suivi et d\'évaluation — Niveau 1', 'MARTIN', 'Vidage du masque', 'Observations des encadrants', 'Bien', 'Nom du moniteur'] as $needle) {
+            $this->assertStringContainsString($needle, mb_strtoupper($needle) === $needle ? mb_strtoupper($html) : $html, $needle);
+        }
+
+        // lien envoyé au stagiaire : 30 jours, code facultatif, livret seul
+        $inst2 = $this->login('inst2@x.fr');
+        $this->assertSame(403, $this->call('POST', "/api/trainees/{$t['id']}/links", [], $inst2)[0]);
+        [$code, $link] = $this->call('POST', "/api/trainees/{$t['id']}/links", ['days' => 30, 'code' => '2468'], $this->inst);
+        $this->assertSame(201, $code);
+        $this->assertSame((new \DateTimeImmutable('today +30 days'))->format('Y-m-d'), $link['expiresAt']);
+        $this->assertTrue($link['hasCode']);
+        $this->assertCount(0, $this->call('GET', '/api/share-links', null, $this->ref)[1], 'pas mélangé aux liens du planning');
+
+        $raw = function (string $uri, ?string $code = null) {
+            $this->client->request('GET', $uri, [], [], $code ? ['HTTP_X_SHARE_CODE' => $code] : []);
+            return [$this->client->getResponse()->getStatusCode(), json_decode($this->client->getResponse()->getContent(), true)];
+        };
+        $this->assertSame(401, $raw("/api/public/{$link['token']}")[0]);
+        [$code, $info] = $raw("/api/public/{$link['token']}", '2468');
+        $this->assertSame(['trainee', 'Léa Martin'], [$info['kind'], $info['name']]);
+        [$code, $pub] = $raw("/api/public/{$link['token']}/trainee", '2468');
+        $this->assertSame(200, $code);
+        $this->assertSame('A', $pub['enrolments'][0]['skills']['N1.ventiler.masque']['status']);
+        $this->assertArrayNotHasKey('validate', $pub['enrolments'][0]['skills']['N1.ventiler.masque']);
+        $this->assertArrayNotHasKey('id', $pub);
+        $this->assertSame(404, $raw("/api/public/{$link['token']}/planning", '2468')[0], 'le lien ne donne pas le planning');
+        [, $links] = $this->call('GET', "/api/trainees/{$t['id']}/links", null, $this->inst);
+        $this->assertSame(1, $links[0]['openCount']);
+        $this->assertNotNull($links[0]['lastOpenedAt']);
+        // révocation par l'encadrant de la section
+        $this->assertSame(204, $this->call('DELETE', "/api/share-links/{$link['id']}", null, $this->inst)[0]);
+        $this->assertSame(404, $raw("/api/public/{$link['token']}/trainee", '2468')[0]);
+    }
+
+    public function testInitiatorComplementAndSignedAttestations(): void
+    {
+        [, $t] = $this->call('POST', '/api/trainees', ['firstName' => 'Marc', 'lastName' => 'Petit', 'sectionId' => $this->section, 'curriculum' => 'INIT'], $this->inst);
+        $e = $t['enrolments'][0]['id'];
+        [, $f] = $this->call('PUT', "/api/enrolments/$e", ['prerequisites' => ['12 plongées après le PA20 (titulaires du PA20 seulement)' => ['date' => '2026-06-01', 'note' => 'Signée par J. Dupont, DP-N5']]], $this->inst);
+        $p = $f['enrolments'][0]['prerequisites'][3];
+        $this->assertSame(['2026-06-01', 'inst@x.fr', 'Signée par J. Dupont, DP-N5'], [$p['date'], $p['by'], $p['note']]);
+        $this->assertSame(400, $this->call('POST', "/api/enrolments/$e/complement", ['type' => 'theory', 'hours' => 7, 'place' => 'Club'], $this->inst)[0], 'initiateur en titre seulement');
+
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->find(\App\Entity\Enrolment::class, $e)->setStatus('done');
+        $em->flush();
+        $this->assertSame(400, $this->call('POST', "/api/enrolments/$e/complement", ['type' => 'dive', 'depth' => 25, 'place' => 'Mer'], $this->inst)[0], '15 à 20 m');
+        $this->call('POST', "/api/enrolments/$e/complement", ['type' => 'theory', 'hours' => 7, 'place' => 'CODEP'], $this->inst);
+        foreach ([18, 20, 15, 17] as $d) [, $f] = $this->call('POST', "/api/enrolments/$e/complement", ['type' => 'dive', 'depth' => $d, 'place' => 'Carrière', 'club' => 'CSA'], $this->inst);
+        $this->assertSame([7, 4, true], [$f['enrolments'][0]['complement']['theoryHours'], $f['enrolments'][0]['complement']['dives'], $f['enrolments'][0]['complement']['complete']]);
+        [, $f] = $this->call('DELETE', "/api/enrolments/$e/complement/1", null, $this->inst);
+        $this->assertFalse($f['enrolments'][0]['complement']['complete']);
+    }
 }

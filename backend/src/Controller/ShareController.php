@@ -2,7 +2,8 @@
 namespace App\Controller;
 
 use App\Entity\ShareLink;
-use App\Service\{PlanningPdf, PlanningService, SlotService};
+use App\Service\{PlanningPdf, PlanningService, SlotService, TraineePdf};
+use App\Training\TrainingService;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpFoundation\{JsonResponse, Request, Response};
 use Symfony\Component\HttpKernel\Exception\{BadRequestHttpException, HttpException, NotFoundHttpException, TooManyRequestsHttpException};
@@ -23,7 +24,7 @@ class ShareController extends ApiController
     #[Route('/api/share-links', methods: 'GET'), IsGranted('ROLE_REFERENT')]
     public function list(EntityManagerInterface $em): JsonResponse
     {
-        return $this->json(array_map(fn (ShareLink $l) => $this->present($l), $em->getRepository(ShareLink::class)->findBy([], ['createdAt' => 'DESC'])));
+        return $this->json(array_map(fn (ShareLink $l) => $this->present($l), $em->getRepository(ShareLink::class)->findBy(['diver' => null], ['createdAt' => 'DESC'])));
     }
 
     /** {"label":"Piscine municipale","expiresAt":"2027-06-30"|null,"code":"1234"|null} */
@@ -44,9 +45,11 @@ class ShareController extends ApiController
     }
 
     /** Change ou retire le code d'accès : {"code":"5678"} ou {"code":null}. */
-    #[Route('/api/share-links/{id}', methods: 'PUT', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
-    public function update(ShareLink $link, Request $req, EntityManagerInterface $em): JsonResponse
+    #[Route('/api/share-links/{id}', methods: 'PUT', requirements: ['id' => '\d+'])]
+    public function update(ShareLink $link, Request $req, EntityManagerInterface $em, TrainingService $training): JsonResponse
     {
+        $u = $this->getUser();
+        if (!$u->isReferent() && !($link->getDiver() && $training->canEvaluate($u, $link->getDiver()))) throw $this->createAccessDeniedException('Réservé aux référents');
         $d = $this->body($req);
         if (array_key_exists('code', $d)) $link->setCode($this->code($d['code']));
         $em->flush();
@@ -54,9 +57,11 @@ class ShareController extends ApiController
     }
 
     /** Révoque le lien : l'adresse ne fonctionne plus. */
-    #[Route('/api/share-links/{id}', methods: 'DELETE', requirements: ['id' => '\d+']), IsGranted('ROLE_REFERENT')]
-    public function delete(ShareLink $link, EntityManagerInterface $em): JsonResponse
+    #[Route('/api/share-links/{id}', methods: 'DELETE', requirements: ['id' => '\d+'])]
+    public function delete(ShareLink $link, EntityManagerInterface $em, TrainingService $training): JsonResponse
     {
+        $u = $this->getUser();
+        if (!$u->isReferent() && !($link->getDiver() && $training->canEvaluate($u, $link->getDiver()))) throw $this->createAccessDeniedException('Réservé aux référents');
         $em->remove($link);
         $em->flush();
         return $this->json(null, 204);
@@ -68,13 +73,17 @@ class ShareController extends ApiController
     public function info(string $token, Request $req, EntityManagerInterface $em, SlotService $slots): JsonResponse
     {
         $link = $this->valid($token, $req, $em, $slots);
-        return $this->private($this->json(['label' => $link->getLabel(), 'expiresAt' => $link->getExpiresAt()?->format('Y-m-d')]));
+        $link->markOpened();
+        $em->flush();
+        $d = $link->getDiver();
+        return $this->private($this->json(['label' => $link->getLabel(), 'expiresAt' => $link->getExpiresAt()?->format('Y-m-d'),
+            'kind' => $d ? 'trainee' : 'planning', 'name' => $d?->getFullName()]));
     }
 
     #[Route('/api/public/{token}/planning', methods: 'GET')]
     public function planning(string $token, Request $req, EntityManagerInterface $em, SlotService $slots, PlanningService $planning): JsonResponse
     {
-        $this->valid($token, $req, $em, $slots);
+        $this->valid($token, $req, $em, $slots, 'planning');
         [$from, $to] = $this->period($req);
         return $this->private($this->json($planning->build($from, $to, null, false)));
     }
@@ -82,15 +91,35 @@ class ShareController extends ApiController
     #[Route('/api/public/{token}/pdf', methods: 'GET')]
     public function pdf(string $token, Request $req, EntityManagerInterface $em, SlotService $slots, PlanningService $planning, PlanningPdf $pdf): Response
     {
-        $this->valid($token, $req, $em, $slots);
+        $this->valid($token, $req, $em, $slots, 'planning');
         [$from, $to] = $this->period($req);
         return $this->private($pdf->response($planning->build($from, $to, null, false), (string) $req->query->get('title', 'Planning des lignes d\'eau'), $from));
     }
 
-    private function valid(string $token, Request $req, EntityManagerInterface $em, SlotService $slots): ShareLink
+    /** Livret du stagiaire (lien envoyé à la demande) : lecture seule. */
+    #[Route('/api/public/{token}/trainee', methods: 'GET')]
+    public function trainee(string $token, Request $req, EntityManagerInterface $em, SlotService $slots, TrainingService $training): JsonResponse
+    {
+        $link = $this->valid($token, $req, $em, $slots, 'trainee');
+        $fiche = $training->publicFiche($link->getDiver());
+        // intitulés des cursus suivis (la page publique n'a pas accès à /api/mft)
+        $fiche['curricula'] = array_values(array_map(fn ($en) => \App\Training\Mft::curriculum($en['curriculum']), $fiche['enrolments']));
+        return $this->private($this->json($fiche));
+    }
+
+    #[Route('/api/public/{token}/trainee/pdf', methods: 'GET')]
+    public function traineePdf(string $token, Request $req, EntityManagerInterface $em, SlotService $slots, TrainingService $training, TraineePdf $pdf): Response
+    {
+        $link = $this->valid($token, $req, $em, $slots, 'trainee');
+        return $this->private($pdf->response($training->publicFiche($link->getDiver(), $req->query->getInt('enrolment') ?: null)));
+    }
+
+    /** $kind : 'planning' ou 'trainee' (un lien ne donne accès qu'à ce pour quoi il a été créé). */
+    private function valid(string $token, Request $req, EntityManagerInterface $em, SlotService $slots, ?string $kind = null): ShareLink
     {
         $link = $em->getRepository(ShareLink::class)->findOneBy(['token' => $token]);
         $now = new \DateTimeImmutable('now', $slots->timezone());
+        if ($link && $kind && ($kind === 'trainee') !== ($link->getDiver() !== null)) $link = null;
         if (!$link || !$link->isValid($now)) {
             throw new NotFoundHttpException('Ce lien de partage n\'existe pas ou n\'est plus valable.');
         }
@@ -134,9 +163,10 @@ class ShareController extends ApiController
         return [$from, $req->query->get('to') ? $this->date($req->query->get('to'), 'to') : $from->modify('+7 days')];
     }
 
-    private function present(ShareLink $l): array
+    public function present(ShareLink $l): array
     {
         return ['id' => $l->getId(), 'token' => $l->getToken(), 'label' => $l->getLabel(), 'createdBy' => $l->getCreatedBy()?->getName(),
-            'createdAt' => $l->getCreatedAt()->format(\DATE_ATOM), 'expiresAt' => $l->getExpiresAt()?->format('Y-m-d'), 'hasCode' => $l->hasCode()];
+            'createdAt' => $l->getCreatedAt()->format(\DATE_ATOM), 'expiresAt' => $l->getExpiresAt()?->format('Y-m-d'), 'hasCode' => $l->hasCode(),
+            'openCount' => $l->getOpenCount(), 'lastOpenedAt' => $l->getLastOpenedAt()?->format(\DATE_ATOM), 'diverId' => $l->getDiver()?->getId()];
     }
 }

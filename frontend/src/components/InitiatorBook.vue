@@ -12,7 +12,7 @@ import type { Enrolment, MftCurriculum, MftModule, ModuleState, TeachingSessionE
  * Livret pédagogique Initiateur : trois modules évalués par séances (A, ECA, NT par item),
  * exigences pratiques du module 2, validation des modules par le tuteur (E4 ou E3-TSI), dispense du module 1.
  */
-const props = defineProps<{ enrolment: Enrolment; cur: MftCurriculum; editable: boolean }>()
+const props = defineProps<{ enrolment: Enrolment; cur: MftCurriculum; editable: boolean; canEvaluate: boolean }>()
 const emit = defineEmits<{ updated: [Trainee] }>()
 const auth = useAuth(), toast = useToast()
 
@@ -74,6 +74,19 @@ function remove(s: TeachingSessionEntry) {
   if (confirm(`Supprimer la séance du ${dateFr(s.date)} ?`)) act(() => del<Trainee>(`/sessions/${s.id}`), 'Séance supprimée.')
 }
 const expanded = ref<Record<string, boolean>>({})
+// --- Module complémentaire 6-20 m (initiateurs en titre, titulaires du GP-N4)
+const compOpen = ref(false)
+const comp = ref({ type: 'dive' as 'dive' | 'theory', date: today(), place: '', club: '', depth: 18 as number | '', hours: 3.5 as number | '' })
+function openComplement(type: 'dive' | 'theory') {
+  comp.value = { ...comp.value, type, date: today() }
+  compOpen.value = true
+}
+async function saveComplement() {
+  if (await act(() => post<Trainee>(`/enrolments/${props.enrolment.id}/complement`, comp.value), comp.value.type === 'dive' ? 'Plongée enregistrée.' : 'Formation théorique enregistrée.')) compOpen.value = false
+}
+function removeComplement(i: number) {
+  if (confirm('Supprimer cette ligne ?')) act(() => del<Trainee>(`/enrolments/${props.enrolment.id}/complement/${i}`), 'Ligne supprimée.')
+}
 const sessionLabel = (s: TeachingSessionEntry) => (s.validated ? 'Validée' : s.complete ? 'Complète' : 'Incomplète')
 </script>
 
@@ -138,6 +151,48 @@ const sessionLabel = (s: TeachingSessionEntry) => (s.validated ? 'Validée' : s.
     </div>
   </article>
 
+  <article v-if="enrolment.status === 'done' && enrolment.complement" class="card module" :class="{ done: enrolment.complement.complete }">
+    <header>
+      <div>
+        <h3>Module complémentaire 6–20 m <small class="muted">(facultatif)</small></h3>
+        <p class="small muted">Pour les initiateurs en titre titulaires du GP-N4, afin d'enseigner en tant que E2 : 14 h de formation dont 7 h de théorie (en présentiel, sur un mois au plus) et au moins 4 plongées d'enseignement entre 15 et 20 m en milieu naturel, avec un encadrant E3-TSI minimum dans la palanquée.</p>
+      </div>
+      <span v-if="enrolment.complement.complete" class="chip chip-ok">Complet</span>
+    </header>
+    <div class="counters">
+      <span :class="{ ok: enrolment.complement.theoryHours >= 7 }"><strong>{{ enrolment.complement.theoryHours }}</strong>/7 h de théorie</span>
+      <span :class="{ ok: enrolment.complement.dives >= 4 }"><strong>{{ enrolment.complement.dives }}</strong>/4 plongées 15–20 m</span>
+    </div>
+    <div v-if="canEvaluate" class="row actions">
+      <button class="btn btn-secondary btn-sm" @click="openComplement('theory')"><AppIcon name="plus" :size="15" /> Théorie</button>
+      <button class="btn btn-secondary btn-sm" @click="openComplement('dive')"><AppIcon name="plus" :size="15" /> Plongée d'enseignement</button>
+    </div>
+    <ul class="comp-list">
+      <li v-for="(x, i) in enrolment.complement.entries" :key="i" class="small">
+        <strong>{{ dateFr(x.date) }}</strong> · {{ x.type === 'theory' ? `Théorie ${x.hours} h` : `Plongée ${x.depth} m` }} · {{ x.place }}<template v-if="x.type === 'dive' && x.club"> ({{ x.club }})</template>
+        <span class="muted">— {{ x.by }}</span>
+        <button v-if="canEvaluate" class="btn btn-ghost btn-icon btn-sm" title="Supprimer" @click="removeComplement(i)"><AppIcon name="trash" :size="14" /></button>
+      </li>
+    </ul>
+  </article>
+
+  <AppDialog v-model="compOpen" :title="comp.type === 'dive' ? 'Plongée d\'enseignement (15–20 m)' : 'Compléments théoriques'">
+    <form id="comp-form" class="stack" style="gap:.7rem" @submit.prevent="saveComplement">
+      <div class="fields">
+        <label class="field">Date<input v-model="comp.date" type="date" :max="today()" required /></label>
+        <label v-if="comp.type === 'theory'" class="field">Volume horaire (h)<input v-model.number="comp.hours" type="number" min="0.5" max="14" step="0.5" required /></label>
+        <label v-else class="field">Profondeur (m)<input v-model.number="comp.depth" type="number" min="15" max="20" required /></label>
+      </div>
+      <label class="field">Lieu<input v-model="comp.place" maxlength="120" required :placeholder="comp.type === 'dive' ? 'ex. Carrière de …, mer' : 'ex. CODEP, club'" /></label>
+      <label v-if="comp.type === 'dive'" class="field">Club <small>(facultatif)</small><input v-model="comp.club" maxlength="120" /></label>
+      <p class="small muted">{{ comp.type === 'dive' ? 'À faire signer par un E3 ou le président du club.' : 'À faire signer par un E4.' }} L'application enregistre votre nom comme auteur de la saisie.</p>
+    </form>
+    <template #actions>
+      <button type="button" class="btn btn-ghost" @click="compOpen = false">Annuler</button>
+      <button class="btn" form="comp-form"><AppIcon name="check" /> Enregistrer</button>
+    </template>
+  </AppDialog>
+
   <AppDialog v-model="open" :title="mod ? `Séance — ${mod.title}` : 'Séance'">
     <form v-if="mod" id="session-form" class="stack" style="gap:.75rem" @submit.prevent="save">
       <div class="fields">
@@ -195,6 +250,8 @@ const sessionLabel = (s: TeachingSessionEntry) => (s.validated ? 'Validée' : s.
 .phase h4 { margin: .5rem 0 .25rem; font-size: .8rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted) }
 .item { display: flex; align-items: center; gap: .5rem; padding: .15rem 0; font-size: .92rem }
 .comment { font-style: italic }
+.comp-list { list-style: none; padding: 0; margin: .5rem 0 0 }
+.comp-list li { display: flex; flex-wrap: wrap; align-items: center; gap: .35rem; padding: .25rem 0; border-top: 1px dashed var(--line) }
 .st { display: inline-flex; justify-content: center; min-width: 2.6em; padding: .1rem .35rem; border-radius: 6px; font-size: .72rem; font-weight: 700; background: #eef2f6; color: #6b7a89 }
 .st.ECA { background: var(--warn-50); color: var(--warn) }
 .st.A { background: var(--ok); color: #fff }

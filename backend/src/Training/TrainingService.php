@@ -175,8 +175,15 @@ final class TrainingService
             'issued' => $e->getIssued(),
         ];
         if (!$full) return $data;
-        $data['prerequisites'] = array_map(fn ($label) => ['label' => $label, 'done' => !empty($e->getPrerequisites()[$label])], $cur['prerequisites']);
+        $data['prerequisites'] = array_map(function ($label) use ($e) {
+            $v = $e->getPrerequisites()[$label] ?? null;
+            return ['label' => $label, 'done' => !empty($v), 'date' => is_array($v) ? ($v['date'] ?? null) : null, 'by' => is_array($v) ? ($v['by'] ?? null) : null, 'note' => is_array($v) ? ($v['note'] ?? null) : null];
+        }, $cur['prerequisites']);
         if (self::isTeaching($e)) {
+            $c = $e->getDossier()['complement'] ?? [];
+            $hours = array_sum(array_map(fn ($x) => $x['type'] === 'theory' ? $x['hours'] : 0, $c));
+            $dives = count(array_filter($c, fn ($x) => $x['type'] === 'dive'));
+            $data['complement'] = ['entries' => $c, 'theoryHours' => $hours, 'dives' => $dives, 'complete' => $hours >= 7 && $dives >= 4];
             $data['dossier'] = $e->getDossier();
             $data['modules'] = array_map(fn ($m) => $this->moduleState($viewer, $e, $m), $cur['modules']);
             $data['qualifications'] = array_map(fn ($q) => ['code' => $q, 'label' => $cur['qualifications'][$q], 'issued' => $e->getIssued()[$q] ?? null, 'cannotIssue' => $this->cannotIssue($viewer, $e, $q)], array_keys($cur['qualifications']));
@@ -184,7 +191,6 @@ final class TrainingService
             $data += ['competencies' => [], 'skills' => new \stdClass(), 'evaluations' => []];
             return $data;
         }
-        $data['prerequisites'] = array_map(fn ($label) => ['label' => $label, 'done' => !empty($e->getPrerequisites()[$label])], $cur['prerequisites']);
         $data['competencies'] = array_map(fn ($c) => ['key' => $c['key'], 'status' => self::competencyStatus($c, $statuses)], $cur['competencies']);
         $data['skills'] = array_map(fn ($k) => [
             'status' => $statuses[$k],
@@ -314,6 +320,34 @@ final class TrainingService
                 'id' => $s->getId(), 'date' => $s->getDate()->format('Y-m-d'), 'level' => $s->getLevel(), 'theme' => $s->getTheme(), 'items' => (object) $s->getItems(),
                 'comment' => $s->getComment(), 'instructor' => $s->getInstructorName(), 'instructorId' => $s->getInstructor()?->getId(),
             ] + self::sessionState($module, $s), array_reverse($this->sessionsOf($e, $module['key']))),
+        ];
+    }
+
+    /** Fiche en lecture seule, pour le lien envoyé au stagiaire : sans prérogatives ni identifiants internes. */
+    public function publicFiche(Diver $d, ?int $enrolmentId = null): array
+    {
+        $nobody = new User();
+        $enrolments = [];
+        foreach ($d->getEnrolments() as $e) {
+            if ($enrolmentId && $e->getId() !== $enrolmentId) continue;
+            $p = $this->present($e, $nobody);
+            foreach ($p['skills'] as $k => $sk) unset($p['skills'][$k]['validate']);
+            $p['evaluations'] = array_map(fn ($ev) => array_diff_key($ev, ['instructorId' => 1]), $p['evaluations']);
+            $p['qualifications'] = array_map(fn ($q) => array_diff_key($q, ['cannotIssue' => 1]), $p['qualifications']);
+            if (isset($p['modules'])) {
+                $p['modules'] = array_map(function ($m) {
+                    unset($m['cannotValidate']);
+                    $m['sessions'] = array_map(fn ($s) => array_diff_key($s, ['instructorId' => 1]), $m['sessions']);
+                    return $m;
+                }, $p['modules']);
+            }
+            unset($p['canTutor']);
+            $enrolments[] = $p;
+        }
+        return [
+            'firstName' => $d->getFirstName(), 'lastName' => $d->getLastName(), 'licence' => $d->getLicence(),
+            'sections' => array_map(fn (Section $s) => ['name' => $s->getName(), 'color' => $s->getColor()], $this->sectionsOf($d)),
+            'enrolments' => $enrolments,
         ];
     }
 }

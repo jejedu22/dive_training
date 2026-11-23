@@ -3,7 +3,8 @@ import { computed, onMounted, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
 import InitiatorBook from '../components/InitiatorBook.vue'
-import { del, get, post, put } from '../api'
+import { del, download, get, post, put } from '../api'
+import TraineeLinkDialog from '../components/TraineeLinkDialog.vue'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
 import { PLACE_LABELS, STATUS_LABELS, STATUS_SHORT, useMft } from '../composables/mft'
@@ -80,7 +81,26 @@ async function enrol() {
     enrolOpen.value = false
   }
 }
-const togglePrereq = (label: string, done: boolean) => run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { prerequisites: { [label]: done } }))
+/** Cocher un prérequis enregistre la date et le signataire ; une note facultative précise l'attestation. */
+function togglePrereq(label: string, done: boolean, ev: Event) {
+  if (!done) return run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { prerequisites: { [label]: false } }))
+  const note = prompt(`${label}\n\nNote facultative (ex. « attestation signée par J. Dupont, DP-N5 ») :`, '')
+  if (note === null) { (ev.target as HTMLInputElement).checked = false; return }
+  return run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { prerequisites: { [label]: { note: note.trim() || null } } }))
+}
+const linkOpen = ref(false)
+const pdfBusy = ref(false)
+async function pdf() {
+  pdfBusy.value = true
+  try {
+    await download(`/trainees/${props.id}/pdf${enrolment.value ? `?enrolment=${enrolment.value.id}` : ''}`,
+      `livret-${`${t.value!.lastName}-${t.value!.firstName}`.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf`)
+  } catch (e) {
+    toast.error(e)
+  } finally {
+    pdfBusy.value = false
+  }
+}
 const stage = ref({ date: '', ctr: '' })
 watch(enrolment, (e) => { stage.value = { date: e?.dossier?.stageInitial?.date ?? '', ctr: e?.dossier?.stageInitial?.ctr ?? '' } }, { immediate: true })
 const saveStage = () => run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { dossier: { stageInitial: stage.value.date ? stage.value : null } }), 'Stage initial enregistré.')
@@ -179,9 +199,11 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
           <span v-if="t.licence" class="muted">· Licence {{ t.licence }}</span>
         </p>
       </div>
-      <div v-if="t.canEvaluate" class="row">
-        <button v-if="notEnrolled.length" class="btn btn-secondary" @click="openEnrol"><AppIcon name="plus" :size="16" /> Cursus</button>
-        <button class="btn btn-secondary btn-icon" title="Modifier la fiche" @click="openEdit"><AppIcon name="edit" /></button>
+      <div class="row">
+        <button v-if="t.enrolments.length" class="btn btn-secondary" :disabled="pdfBusy" title="Fiche de suivi au format PDF" @click="pdf"><AppIcon name="download" :size="16" /> PDF</button>
+        <button v-if="t.canEvaluate && t.enrolments.length" class="btn btn-secondary" @click="linkOpen = true"><AppIcon name="lock" :size="16" /> Envoyer le livret</button>
+        <button v-if="t.canEvaluate && notEnrolled.length" class="btn btn-secondary" @click="openEnrol"><AppIcon name="plus" :size="16" /> Cursus</button>
+        <button v-if="t.canEvaluate" class="btn btn-secondary btn-icon" title="Modifier la fiche" @click="openEdit"><AppIcon name="edit" /></button>
       </div>
     </div>
 
@@ -235,7 +257,8 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
               <button v-if="t.canEvaluate" class="btn btn-secondary btn-sm">Enregistrer</button>
             </form>
             <label v-for="p in enrolment.prerequisites" :key="p.label" class="check">
-              <input type="checkbox" :checked="p.done" :disabled="!t.canEvaluate" @change="togglePrereq(p.label, ($event.target as HTMLInputElement).checked)" /> {{ p.label }}
+              <input type="checkbox" :checked="p.done" :disabled="!t.canEvaluate" @change="togglePrereq(p.label, ($event.target as HTMLInputElement).checked, $event)" />
+              <span>{{ p.label }}<small v-if="p.done && p.date" class="muted signed"> — {{ dateFr(p.date) }}<template v-if="p.by">, {{ p.by }}</template><template v-if="p.note"> · {{ p.note }}</template></small></span>
             </label>
             <ul class="notes">
               <li v-for="n in cur.notes" :key="n">{{ n }}</li>
@@ -258,7 +281,7 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
           </section>
         </div>
 
-        <InitiatorBook v-if="teaching" :enrolment="enrolment" :cur="cur" :editable="editable" @updated="t = $event" />
+        <InitiatorBook v-if="teaching" :enrolment="enrolment" :cur="cur" :editable="editable" :can-evaluate="t.canEvaluate" @updated="t = $event" />
         <template v-else>
         <p class="legend small">
           <span v-for="s in (['NT', 'ECA', 'A', 'V'] as SkillStatus[])" :key="s"><span class="st" :class="s">{{ STATUS_SHORT[s] }}</span> {{ STATUS_LABELS[s] }}</span>
@@ -347,6 +370,8 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
       </template>
     </AppDialog>
 
+    <TraineeLinkDialog v-if="t.canEvaluate" v-model="linkOpen" :diver-id="t.id" :name="`${t.firstName} ${t.lastName}`" />
+
     <!-- Inscrire à un cursus -->
     <AppDialog v-model="enrolOpen" title="Inscrire à un cursus">
       <form id="enrol-form" class="stack" style="gap:.7rem" @submit.prevent="enrol">
@@ -401,6 +426,7 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
 .check { display: flex; align-items: center; gap: .5rem; padding: .2rem 0 }
 .stage { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; align-items: end; margin-bottom: .5rem }
 @media (max-width: 500px) { .stage { grid-template-columns: 1fr } }
+.signed { display: block; font-size: .78rem }
 .notes { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: .85rem }
 .qual { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .45rem 0; border-top: 1px solid var(--line) }
 .qual:first-of-type { border-top: 0 }

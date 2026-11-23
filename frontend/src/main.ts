@@ -18,6 +18,7 @@ const router = createRouter({
     { path: '/planning', component: () => import('./views/PlanningView.vue'), meta: { title: 'Planning' } },
     { path: '/occupation', redirect: '/planning' }, // ancienne page « Lignes d'eau »
     { path: '/stagiaires', component: () => import('./views/TraineesView.vue'), meta: { title: 'Stagiaires' } },
+    { path: '/stagiaires/tableau', component: () => import('./views/TraineeBoardView.vue'), meta: { title: 'Tableau de section' } },
     { path: '/stagiaires/:id(\\d+)', component: () => import('./views/TraineeView.vue'), props: (r) => ({ id: Number(r.params.id) }), meta: { title: 'Suivi du stagiaire' } },
     { path: '/sections', component: () => import('./views/SectionsView.vue'), meta: { title: 'Sections' } },
     { path: '/slots', component: () => import('./views/SlotsView.vue'), meta: { title: 'Créneaux' } },

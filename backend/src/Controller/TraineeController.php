@@ -1,7 +1,9 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\{Diver, Enrolment, Evaluation, Section, TeachingSession};
+use App\Entity\{Diver, Enrolment, Evaluation, Section, ShareLink, TeachingSession};
+use App\Service\TraineePdf;
+use Symfony\Component\HttpFoundation\Response;
 use App\Service\Presenter;
 use App\Training\{Mft, TrainingService};
 use Doctrine\ORM\EntityManagerInterface;
@@ -60,6 +62,47 @@ class TraineeController extends ApiController
         return $this->json($this->fiche($diver), 201);
     }
 
+    /**
+     * Tableau de section : stagiaires en cours dans un cursus × compétences (ou modules pour l'initiateur).
+     * ?curriculum=N1&section=3 (section facultative)
+     */
+    #[Route('/api/trainees/board', methods: 'GET')]
+    public function board(Request $req): JsonResponse
+    {
+        $code = (string) $req->query->get('curriculum', 'N1');
+        $cur = Mft::curriculum($code) ?? throw new BadRequestHttpException('Cursus inconnu');
+        $section = $req->query->getInt('section') ? ($this->em->find(Section::class, $req->query->getInt('section')) ?? throw $this->createNotFoundException('Section introuvable')) : null;
+        $enrolments = $this->em->getRepository(Enrolment::class)->findBy(['curriculum' => $code, 'status' => 'active']);
+        $rows = [];
+        foreach ($enrolments as $e) {
+            $d = $e->getDiver();
+            if ($d->isArchived() || ($section && !$section->getDivers()->contains($d))) continue;
+            $p = $this->training->present($e, $this->getUser());
+            $rows[] = [
+                'diverId' => $d->getId(), 'firstName' => $d->getFirstName(), 'lastName' => $d->getLastName(),
+                'enrolmentId' => $e->getId(), 'progress' => $p['progress'], 'deadline' => $p['deadline'],
+                'cells' => TrainingService::isTeaching($e)
+                    ? array_map(fn ($m) => $this->moduleCell($cur, $m), $p['modules'])
+                    : array_map(fn ($c) => ['key' => $c['key'], 'status' => $c['status'], 'detail' => null], $p['competencies']),
+                'issuable' => array_values(array_map(fn ($q) => $q['code'], array_filter($p['qualifications'], fn ($q) => !$q['issued'] && $q['cannotIssue'] === null))),
+            ];
+        }
+        usort($rows, fn ($a, $b) => [$a['lastName'], $a['firstName']] <=> [$b['lastName'], $b['firstName']]);
+        $columns = ($cur['type'] ?? 'diver') === 'teaching'
+            ? array_map(fn ($m) => ['key' => $m['key'], 'title' => $m['title'], 'group' => null], $cur['modules'])
+            : array_map(fn ($c) => ['key' => $c['key'], 'title' => $c['title'], 'group' => $c['group']], $cur['competencies']);
+        return $this->json(['curriculum' => $code, 'columns' => $columns, 'rows' => $rows]);
+    }
+
+    /** Module initiateur dans le tableau : V validé/dispensé, A séances suffisantes (à valider par le tuteur), ECA commencé. */
+    private function moduleCell(array $cur, array $m): array
+    {
+        $def = Mft::module($cur, $m['key']);
+        $c = $m['counts'];
+        $status = $m['validated'] || $m['exempted'] ? 'V' : ($c['complete'] >= $def['minSessions'] && $c['validated'] >= $def['minValidated'] ? 'A' : ($c['sessions'] ? 'ECA' : 'NT'));
+        return ['key' => $m['key'], 'status' => $status, 'detail' => $m['exempted'] ? 'dispensé' : sprintf('%d/%d complètes · %d/%d validées', $c['complete'], $def['minSessions'], $c['validated'], $def['minValidated'])];
+    }
+
     #[Route('/api/trainees/{id}', methods: 'GET', requirements: ['id' => '\d+'])]
     public function show(Diver $diver): JsonResponse
     {
@@ -102,7 +145,10 @@ class TraineeController extends ApiController
             $p = $e->getPrerequisites();
             foreach ((array) $d['prerequisites'] as $label => $done) {
                 if (!in_array($label, $allowed, true)) throw new BadRequestHttpException("Prérequis inconnu : $label");
-                if ($done) $p[$label] = true; else unset($p[$label]);
+                // attestation : date et signataire (qui a coché), note facultative (ex. « signée par J. Dupont, DP-N5 »)
+                if ($done) $p[$label] = ['date' => is_array($done) && !empty($done['date']) ? $this->day($done['date'])->format('Y-m-d') : (new \DateTimeImmutable('today'))->format('Y-m-d'),
+                    'by' => $this->getUser()->getName(), 'note' => is_array($done) ? $this->text($done['note'] ?? null, 160, 'Note') : null];
+                else unset($p[$label]);
             }
             $e->setPrerequisites($p);
         }
@@ -121,7 +167,7 @@ class TraineeController extends ApiController
             // la date du stage initial vaut prérequis « stage initial réalisé »
             $p = $e->getPrerequisites();
             $label = 'Stage initial réalisé (14 h, encadré par un E4)';
-            if (isset($dossier['stageInitial'])) $p[$label] = true; else unset($p[$label]);
+            if (isset($dossier['stageInitial'])) $p[$label] = ['date' => $dossier['stageInitial']['date'], 'by' => $this->getUser()->getName(), 'note' => $dossier['stageInitial']['ctr']]; else unset($p[$label]);
             $e->setPrerequisites($p);
         }
         $this->em->flush();
@@ -206,6 +252,40 @@ class TraineeController extends ApiController
         return $this->json($this->fiche($e->getDiver()));
     }
 
+    // --------------------------------------------------------------- Export et lien envoyé au stagiaire
+
+    /** Fiche de suivi en PDF (format de la fiche fédérale) : ?enrolment=ID pour un seul cursus. */
+    #[Route('/api/trainees/{id}/pdf', methods: 'GET', requirements: ['id' => '\d+'])]
+    public function pdf(Diver $diver, Request $req, TraineePdf $pdf): Response
+    {
+        return $pdf->response($this->training->publicFiche($diver, $req->query->getInt('enrolment') ?: null));
+    }
+
+    /** Liens envoyés au stagiaire (actifs et expirés). */
+    #[Route('/api/trainees/{id}/links', methods: 'GET', requirements: ['id' => '\d+'])]
+    public function links(Diver $diver, ShareController $share): JsonResponse
+    {
+        $this->training->assertCanEvaluate($this->getUser(), $diver);
+        return $this->json(array_map($share->present(...), $this->em->getRepository(ShareLink::class)->findBy(['diver' => $diver], ['createdAt' => 'DESC'])));
+    }
+
+    /** Crée un lien vers le livret du stagiaire : {"days":30, "code"?: "1234"} (30 jours par défaut, 365 au plus). */
+    #[Route('/api/trainees/{id}/links', methods: 'POST', requirements: ['id' => '\d+'])]
+    public function createLink(Diver $diver, Request $req, ShareController $share): JsonResponse
+    {
+        $this->training->assertCanEvaluate($this->getUser(), $diver);
+        $d = $this->body($req);
+        $days = (int) ($d['days'] ?? 30);
+        if ($days < 1 || $days > 365) throw new BadRequestHttpException('Durée de validité : 1 à 365 jours');
+        $code = isset($d['code']) && trim((string) $d['code']) !== '' ? trim((string) $d['code']) : null;
+        if ($code !== null && (mb_strlen($code) < ShareLink::CODE_MIN || mb_strlen($code) > 64)) throw new BadRequestHttpException('Code d\'accès : ' . ShareLink::CODE_MIN . ' à 64 caractères');
+        $link = (new ShareLink())->setDiver($diver)->setLabel('Livret de ' . $diver->getFullName())->setCreatedBy($this->getUser())
+            ->setExpiresAt(new \DateTimeImmutable("today +$days days"))->setCode($code);
+        $this->em->persist($link);
+        $this->em->flush();
+        return $this->json($share->present($link), 201);
+    }
+
     // --------------------------------------------------------------- Formation Initiateur
 
     /**
@@ -283,6 +363,48 @@ class TraineeController extends ApiController
         }
         $mods[$module] = $st;
         $e->setModules($mods);
+        $this->em->flush();
+        return $this->json($this->fiche($e->getDiver()));
+    }
+
+    /**
+     * Module complémentaire 6-20 m (facultatif, initiateurs en titre titulaires du GP-N4) :
+     * {"type":"theory","date","hours":3.5,"place"} ou {"type":"dive","date","place","club"?,"depth":18}
+     */
+    #[Route('/api/enrolments/{id}/complement', methods: 'POST', requirements: ['id' => '\d+'])]
+    public function addComplement(Enrolment $e, Request $req): JsonResponse
+    {
+        $this->training->assertCanEvaluate($this->getUser(), $e->getDiver());
+        if (!TrainingService::isTeaching($e)) throw new BadRequestHttpException('Réservé à la formation Initiateur');
+        if ($e->getStatus() !== 'done') throw new BadRequestHttpException('Le module complémentaire 6-20 m est réservé aux initiateurs en titre (examen réussi)');
+        $d = $this->body($req);
+        $entry = ['date' => $this->day($d['date'] ?? 'today')->format('Y-m-d'), 'place' => $this->text($d['place'] ?? null, 120, 'Lieu', true), 'by' => $this->getUser()->getName()];
+        if (($d['type'] ?? '') === 'theory') {
+            $hours = (float) ($d['hours'] ?? 0);
+            if ($hours <= 0 || $hours > 14) throw new BadRequestHttpException('Volume horaire invalide');
+            $entry += ['type' => 'theory', 'hours' => $hours];
+        } elseif (($d['type'] ?? '') === 'dive') {
+            $depth = (int) ($d['depth'] ?? 0);
+            if ($depth < 15 || $depth > 20) throw new BadRequestHttpException('Plongée d\'enseignement entre 15 et 20 m');
+            $entry += ['type' => 'dive', 'depth' => $depth, 'club' => $this->text($d['club'] ?? null, 120, 'Club')];
+        } else {
+            throw new BadRequestHttpException('Type invalide (theory ou dive)');
+        }
+        $dossier = $e->getDossier();
+        $dossier['complement'][] = $entry;
+        $e->setDossier($dossier);
+        $this->em->flush();
+        return $this->json($this->fiche($e->getDiver()), 201);
+    }
+
+    #[Route('/api/enrolments/{id}/complement/{index}', methods: 'DELETE', requirements: ['id' => '\d+', 'index' => '\d+'])]
+    public function deleteComplement(Enrolment $e, int $index): JsonResponse
+    {
+        $this->training->assertCanEvaluate($this->getUser(), $e->getDiver());
+        $dossier = $e->getDossier();
+        if (!isset($dossier['complement'][$index])) throw $this->createNotFoundException();
+        array_splice($dossier['complement'], $index, 1);
+        $e->setDossier($dossier);
         $this->em->flush();
         return $this->json($this->fiche($e->getDiver()));
     }

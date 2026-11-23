@@ -2,13 +2,15 @@
 import { onMounted, onUnmounted, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import PlanningTable from '../components/PlanningTable.vue'
+import PublicTrainee from '../components/PublicTrainee.vue'
 import { usePeriod } from '../composables/period'
-import type { Planning } from '../types'
+import type { Planning, Trainee } from '../types'
 
-/** Planning partagé par lien : sans compte, en lecture seule. */
+/** Lien de partage : planning du club, ou livret d'un stagiaire (envoyé à la demande). Sans compte, en lecture seule. */
 const props = defineProps<{ token: string }>()
 const { mode, anchor, label, query, isCurrent, shift, goToday, pdfTitle, pdfName } = usePeriod('month')
-const info = ref<{ label: string | null } | null>(null)
+const info = ref<{ label: string | null; kind: 'planning' | 'trainee'; name: string | null } | null>(null)
+const trainee = ref<Trainee | null>(null)
 const data = ref<Planning | null>(null)
 const error = ref('')
 /** Lien protégé : code demandé (needCode), message d'erreur du dernier essai. */
@@ -62,6 +64,11 @@ async function open() {
     needCode.value = false
     codeError.value = ''
     saveCode(code)
+    if (info.value!.kind === 'trainee') {
+      document.title = `Livret de ${info.value!.name} · Dive Training`
+      trainee.value = await fetchJson<Trainee>('/trainee')
+      return
+    }
     document.title = `Planning des lignes d'eau${info.value?.label ? ` · ${info.value.label}` : ''}`
     await load()
   } catch (e) {
@@ -86,14 +93,15 @@ onMounted(() => {
   open()
 })
 onUnmounted(() => metas.forEach((m) => m.remove()))
-watch([mode, anchor], () => info.value && load())
+watch([mode, anchor], () => info.value?.kind === 'planning' && load())
 
-async function downloadPdf() {
+async function downloadPdf(enrolmentId?: number) {
   downloading.value = true
   try {
-    const r = await request(`/pdf?${query.value}&title=${encodeURIComponent(pdfTitle.value)}`)
+    const isTrainee = info.value?.kind === 'trainee'
+    const r = await request(isTrainee ? `/trainee/pdf${enrolmentId ? `?enrolment=${enrolmentId}` : ''}` : `/pdf?${query.value}&title=${encodeURIComponent(pdfTitle.value)}`)
     const url = URL.createObjectURL(await r.blob())
-    const a = Object.assign(document.createElement('a'), { href: url, download: pdfName.value })
+    const a = Object.assign(document.createElement('a'), { href: url, download: isTrainee ? `livret-${(info.value!.name ?? 'stagiaire').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-')}.pdf` : pdfName.value })
     document.body.appendChild(a)
     a.click()
     a.remove()
@@ -112,13 +120,14 @@ async function downloadPdf() {
     <form v-else-if="needCode" class="card lock" @submit.prevent="submitCode">
       <p class="brand"><img src="/favicon.png" alt="" width="20" height="20" /> Dive Training</p>
       <div class="lock-icon" aria-hidden="true">🔒</div>
-      <h1>Planning protégé</h1>
+      <h1>Accès protégé</h1>
       <p class="muted">Saisissez le code d'accès communiqué par le club.</p>
       <input v-model="codeInput" class="code" autocomplete="off" autocapitalize="off" spellcheck="false" inputmode="text" aria-label="Code d'accès" placeholder="Code d'accès" autofocus />
       <p v-if="codeError" class="err" role="alert">{{ codeError }}</p>
       <button class="btn" :disabled="checking || !codeInput.trim()">{{ checking ? 'Vérification…' : 'Afficher le planning' }}</button>
     </form>
-    <template v-else-if="info">
+    <PublicTrainee v-else-if="info?.kind === 'trainee' && trainee" :fiche="trainee" :downloading="downloading" @pdf="downloadPdf" />
+    <template v-else-if="info && info.kind === 'planning'">
       <div class="page-head">
         <div>
           <p class="brand"><img src="/favicon.png" alt="" width="20" height="20" /> Dive Training</p>
@@ -133,7 +142,7 @@ async function downloadPdf() {
           <button class="btn btn-secondary btn-icon" title="Précédent" @click="shift(-1)"><AppIcon name="left" /></button>
           <button class="btn btn-secondary" :disabled="isCurrent" @click="goToday">Aujourd'hui</button>
           <button class="btn btn-secondary btn-icon" title="Suivant" @click="shift(1)"><AppIcon name="right" /></button>
-          <button class="btn btn-secondary" :disabled="downloading" @click="downloadPdf"><AppIcon name="download" :size="16" /> PDF</button>
+          <button class="btn btn-secondary" :disabled="downloading" @click="downloadPdf()"><AppIcon name="download" :size="16" /> PDF</button>
         </div>
       </div>
       <div v-if="data && !data.occurrences.length" class="card empty"><strong>Aucun créneau du club sur cette période</strong></div>
