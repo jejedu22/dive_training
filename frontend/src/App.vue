@@ -19,6 +19,7 @@ onUnmounted(() => { removeEventListener('online', setOnline); removeEventListene
 
 const nav = computed(() => [
   { to: '/planning', label: 'Planning', short: 'Planning', icon: 'calendar' },
+  { to: '/stagiaires', label: 'Stagiaires', short: 'Stagiaires', icon: 'clipboard' },
   { to: '/sections', label: 'Sections', short: 'Sections', icon: 'users' },
   { to: '/slots', label: 'Créneaux', short: 'Créneaux', icon: 'clock' },
   ...(auth.isReferent ? [{ to: '/pools', label: 'Bassins', short: 'Bassins', icon: 'pool' }] : []),

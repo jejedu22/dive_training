@@ -14,6 +14,7 @@ final class Presenter
         $data = [
             'id' => $u->getId(), 'email' => $u->getEmail(), 'name' => $u->getName(), 'phone' => $u->getPhone(),
             'avatarColor' => $u->getAvatarColor(),
+            'level' => $u->getLevel(), 'tsi' => $u->isTsi(), 'canIssue' => $u->canIssue(),
             'roles' => $u->getStoredRoles(), 'referent' => $u->isReferent(), 'admin' => $u->isAdmin(), 'active' => $u->isActive(),
             'createdAt' => $u->getCreatedAt()?->format(self::DATE), 'lastLoginAt' => $u->getLastLoginAt()?->format(self::DATE),
         ];

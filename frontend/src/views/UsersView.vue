@@ -19,6 +19,14 @@ const levels: { value: Level; label: string; help: string }[] = [
 const rolesOf = (l: Level): Role[] => (l === 'admin' ? ['ROLE_ADMIN'] : l === 'referent' ? ['ROLE_REFERENT'] : [])
 const levelOf = (u: User): Level => (u.admin ? 'admin' : u.referent ? 'referent' : 'instructor')
 const levelLabel = (u: User) => levels.find((l) => l.value === levelOf(u))!.label
+/** Niveaux d'encadrement FFESSM : prérogatives de validation des cursus. */
+const instructorLevels = [
+  { value: '', label: 'Non renseigné — ne peut pas valider de compétence' },
+  { value: 'E1', label: 'E1 — Initiateur : valide le N1' },
+  { value: 'E2', label: 'E2 — valide le N1 et le N2' },
+  { value: 'E3', label: 'E3 — MF1 : valide N1 à N3, délivre les brevets' },
+  { value: 'E4', label: 'E4 — MF2 : valide N1 à N3, délivre les brevets' },
+]
 
 const auth = useAuth(), toast = useToast()
 const users = ref<User[]>([])
@@ -53,11 +61,11 @@ const credentials = (email: string, password: string) =>
 
 // --- Création
 const createOpen = ref(false)
-const form = ref({ name: '', email: '', phone: '', password: '', level: 'instructor' as Level })
+const form = ref({ name: '', email: '', phone: '', password: '', level: 'instructor' as Level, instructorLevel: '', tsi: false, canIssue: false })
 const createError = ref('')
 const created = ref<{ email: string; password: string } | null>(null)
 function openCreate() {
-  form.value = { name: '', email: '', phone: '', password: generatePassword(), level: 'instructor' }
+  form.value = { name: '', email: '', phone: '', password: generatePassword(), level: 'instructor', instructorLevel: '', tsi: false, canIssue: false }
   createError.value = ''
   created.value = null
   createOpen.value = true
@@ -65,7 +73,8 @@ function openCreate() {
 async function create() {
   createError.value = ''
   try {
-    const u = await post<User>('/users', { email: form.value.email, name: form.value.name, password: form.value.password, roles: rolesOf(form.value.level) })
+    const u = await post<User>('/users', { email: form.value.email, name: form.value.name, password: form.value.password, roles: rolesOf(form.value.level),
+      level: form.value.instructorLevel || null, tsi: form.value.tsi, canIssue: form.value.canIssue })
     if (form.value.phone) await put(`/users/${u.id}`, { phone: form.value.phone })
     created.value = { email: u.email, password: form.value.password }
     await load()
@@ -76,10 +85,10 @@ async function create() {
 
 // --- Modification
 const editOpen = ref(false)
-const edit = ref({ id: 0, name: '', email: '', phone: '', level: 'instructor' as Level })
+const edit = ref({ id: 0, name: '', email: '', phone: '', level: 'instructor' as Level, instructorLevel: '', tsi: false, canIssue: false })
 const editError = ref('')
 function openEdit(u: User) {
-  edit.value = { id: u.id, name: u.name, email: u.email, phone: u.phone ?? '', level: levelOf(u) }
+  edit.value = { id: u.id, name: u.name, email: u.email, phone: u.phone ?? '', level: levelOf(u), instructorLevel: u.level ?? '', tsi: u.tsi, canIssue: u.canIssue }
   editError.value = ''
   editOpen.value = true
 }
@@ -88,7 +97,8 @@ async function saveEdit() {
   const self = edit.value.id === auth.user?.id
   try {
     await put(`/users/${edit.value.id}`, {
-      name: edit.value.name, phone: edit.value.phone || null, ...(self ? {} : { email: edit.value.email, roles: rolesOf(edit.value.level) }),
+      name: edit.value.name, phone: edit.value.phone || null,
+      level: edit.value.instructorLevel || null, tsi: edit.value.tsi, canIssue: edit.value.canIssue, ...(self ? {} : { email: edit.value.email, roles: rolesOf(edit.value.level) }),
     })
     toast.ok('Compte modifié.')
     editOpen.value = false
@@ -159,6 +169,9 @@ async function toggle(u: User) {
         <div class="row" style="gap:.4rem">
           <strong>{{ u.name }}</strong>
           <span class="chip" :class="u.admin ? 'chip-primary' : u.referent ? 'chip-ok' : ''">{{ levelLabel(u) }}</span>
+          <span v-if="u.level" class="chip chip-level" title="Niveau d'encadrement">{{ u.level }}</span>
+          <span v-if="u.tsi" class="chip" title="Tuteur de stage initiateur">TSI</span>
+          <span v-if="u.canIssue" class="chip" title="Peut délivrer le Niveau 1">Président</span>
           <span v-if="!u.active" class="chip chip-ko">désactivé</span>
           <span v-if="u.id === auth.user?.id" class="chip">vous</span>
         </div>
@@ -188,6 +201,14 @@ async function toggle(u: User) {
         <label class="field">Rôle
           <select v-model="form.level"><option v-for="l in levels" :key="l.value" :value="l.value">{{ l.label }} — {{ l.help }}</option></select>
         </label>
+        <fieldset class="ffessm">
+          <legend>Encadrement FFESSM</legend>
+          <label class="field">Niveau d'encadrement
+            <select v-model="form.instructorLevel"><option v-for="l in instructorLevels" :key="l.value" :value="l.value">{{ l.label }}</option></select>
+          </label>
+          <label class="check"><input v-model="form.tsi" type="checkbox" /> Tuteur de stage initiateur (TSI)</label>
+          <label class="check"><input v-model="form.canIssue" type="checkbox" /> Président du club ou délégué : peut délivrer le Niveau 1</label>
+        </fieldset>
         <div class="field">Mot de passe initial
           <div class="row" style="flex-wrap:nowrap">
             <input v-model="form.password" minlength="8" required class="mono" style="flex:1" />
@@ -224,6 +245,14 @@ async function toggle(u: User) {
         <select v-model="edit.level" :disabled="edit.id === auth.user?.id"><option v-for="l in levels" :key="l.value" :value="l.value">{{ l.label }} — {{ l.help }}</option></select>
       </label>
       <p v-if="edit.id === auth.user?.id" class="muted small">Vous ne pouvez pas changer votre propre rôle.</p>
+      <fieldset class="ffessm">
+          <legend>Encadrement FFESSM</legend>
+          <label class="field">Niveau d'encadrement
+            <select v-model="edit.instructorLevel"><option v-for="l in instructorLevels" :key="l.value" :value="l.value">{{ l.label }}</option></select>
+          </label>
+          <label class="check"><input v-model="edit.tsi" type="checkbox" /> Tuteur de stage initiateur (TSI)</label>
+          <label class="check"><input v-model="edit.canIssue" type="checkbox" /> Président du club ou délégué : peut délivrer le Niveau 1</label>
+        </fieldset>
     </form>
     <div v-if="editError" class="alert alert-ko" style="margin-top:.75rem"><AppIcon name="alert" /> <span>{{ editError }}</span></div>
     <template #actions>
@@ -269,6 +298,10 @@ async function toggle(u: User) {
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: .03em }
 .creds { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: .75rem; white-space: pre-wrap; font-size: .85rem; user-select: all }
 .small { font-size: .85rem }
+.chip-level { background: #102a43; color: #fff }
+.ffessm { border: 1px solid var(--line); border-radius: 10px; padding: .6rem .75rem .75rem; display: flex; flex-direction: column; gap: .5rem; margin: 0 }
+.ffessm legend { font-weight: 600; font-size: .9rem; padding: 0 .3rem }
+.check { display: flex; align-items: center; gap: .5rem; font-size: .92rem }
 @media (max-width: 760px) {
   .user { flex-wrap: wrap; align-items: flex-start }
   .actions { width: 100%; justify-content: flex-start }

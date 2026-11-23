@@ -1,8 +1,11 @@
+export type InstructorLevel = 'E1' | 'E2' | 'E3' | 'E4'
 export type Role = 'ROLE_REFERENT' | 'ROLE_ADMIN'
 export interface Preferences { homePage: 'planning' | 'sections'; planningView: 'week' | 'month'; onlyMine: boolean }
 export interface User {
   id: number; email: string; name: string; phone: string | null; avatarColor: string
   roles: Role[]; referent: boolean; admin: boolean; active: boolean
+  /** Niveau d'encadrement FFESSM (E1 à E4), tuteur de stage initiateur, délivrance du N1 (président). */
+  level: InstructorLevel | null; tsi: boolean; canIssue: boolean
   createdAt: string | null; lastLoginAt: string | null
   preferences?: Preferences                                    // seulement pour l'utilisateur connecté
   sections?: { id: number; name: string; color: string }[]     // seulement dans la gestion des comptes
@@ -51,3 +54,34 @@ export interface PresenceList {
   divers: { diver: Diver; usesTank: boolean }[]; tankCount: number
 }
 export interface ShareLink { id: number; token: string; label: string | null; createdBy: string | null; createdAt: string; expiresAt: string | null; hasCode: boolean }
+
+// ---------- Suivi des stagiaires (MFT FFESSM)
+export type SkillStatus = 'NT' | 'ECA' | 'A' | 'V'
+export type Place = 'pool' | 'pit' | 'natural'
+export interface MftCompetency { key: string; title: string; group: string | null; quals: string[]; skills: Record<string, string>; final: boolean; theory: boolean; natural: boolean }
+export interface MftCurriculum {
+  code: string; name: string; subtitle: string; version: string; qualifications: Record<string, string>
+  validateLevel: InstructorLevel; issueLevel: InstructorLevel; presidentMayIssue: boolean; naturalOnly: boolean; delayMonths: number
+  prerequisites: string[]; notes: string[]; competencies: MftCompetency[]
+}
+export interface Mft { curricula: MftCurriculum[]; levels: InstructorLevel[]; places: Record<Place, string>; statuses: Record<string, string> }
+export interface EvaluationEntry {
+  id: number; skill: string; status: SkillStatus; date: string; place: Place; site: string | null; depth: number | null
+  comment: string | null; instructor: string; instructorId: number | null
+}
+export interface EnrolmentSummary {
+  id: number; curriculum: string; name: string; version: string; startedAt: string; status: 'active' | 'done' | 'abandoned'
+  progress: { validated: number; started: number; total: number }
+  firstValidatedAt: string | null; deadline: string | null; issued: Record<string, { date: string; by: string }>
+}
+export interface Enrolment extends EnrolmentSummary {
+  prerequisites: { label: string; done: boolean }[]
+  competencies: { key: string; status: SkillStatus }[]
+  /** Par élément : statut, dernière évaluation, raison qui empêche « Validé » (null = possible) selon le lieu. */
+  skills: Record<string, { status: SkillStatus; last: EvaluationEntry | null; validate: { natural: string | null; pool: string | null } }>
+  evaluations: EvaluationEntry[]
+  qualifications: { code: string; label: string; issued: { date: string; by: string } | null; cannotIssue: string | null }[]
+}
+export interface SectionRef { id: number; name: string; color: string }
+export interface TraineeSummary extends Diver { licence: string | null; archived: boolean; sections: SectionRef[]; enrolments: EnrolmentSummary[] }
+export interface Trainee extends Diver { licence: string | null; archived: boolean; sections: SectionRef[]; canEvaluate: boolean; enrolments: Enrolment[] }

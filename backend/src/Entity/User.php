@@ -35,6 +35,15 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     private ?\DateTimeImmutable $createdAt = null;
     #[ORM\Column(nullable: true)]
     private ?\DateTimeImmutable $lastLoginAt = null;
+    /** Niveau d'encadrement FFESSM : E1 (initiateur) à E4 (MF2) ; détermine les prérogatives de validation. */
+    #[ORM\Column(length: 2, nullable: true)]
+    private ?string $level = null;
+    /** Titulaire de l'attestation de tuteur de stage initiateur (TSI). */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $tsi = false;
+    /** Président du club (ou délégué) : peut délivrer le Niveau 1. */
+    #[ORM\Column(options: ['default' => false])]
+    private bool $canIssue = false;
 
     public const ROLES = ['ROLE_INSTRUCTOR', 'ROLE_REFERENT', 'ROLE_ADMIN'];
     /** Préférences et valeurs autorisées (la première est la valeur par défaut). */
@@ -82,5 +91,11 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     public function getCreatedAt(): ?\DateTimeImmutable { return $this->createdAt; }
     public function getLastLoginAt(): ?\DateTimeImmutable { return $this->lastLoginAt; }
     public function setLastLoginAt(\DateTimeImmutable $d): static { $this->lastLoginAt = $d; return $this; }
+    public function getLevel(): ?string { return $this->level; }
+    public function setLevel(?string $l): static { $this->level = $l; return $this; }
+    public function isTsi(): bool { return $this->tsi; }
+    public function setTsi(bool $b): static { $this->tsi = $b; return $this; }
+    public function canIssue(): bool { return $this->canIssue; }
+    public function setCanIssue(bool $b): static { $this->canIssue = $b; return $this; }
     public function isReferent(): bool { return in_array('ROLE_REFERENT', $this->roles, true) || $this->isAdmin(); }
 }

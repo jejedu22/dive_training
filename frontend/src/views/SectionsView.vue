@@ -151,7 +151,7 @@ const createDiver = (s: Section) => run(async () => {
         <h3 class="sub">Élèves</h3>
         <div v-if="s.divers.length" class="divers">
           <div v-for="d in s.divers" :key="d.id" class="diver">
-            <span><strong>{{ d.lastName }}</strong> {{ d.firstName }} <small v-if="d.level">· {{ d.level }}</small></span>
+            <router-link :to="`/stagiaires/${d.id}`" title="Fiche de suivi"><strong>{{ d.lastName }}</strong> {{ d.firstName }} <small v-if="d.level">· {{ d.level }}</small></router-link>
             <button class="btn btn-ghost btn-icon btn-sm" :title="`Retirer ${d.firstName}`" @click="detach(s, d)"><AppIcon name="x" :size="15" /></button>
           </div>
         </div>
