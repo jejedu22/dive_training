@@ -107,6 +107,38 @@ final class TrainingService
         return $ev;
     }
 
+    /**
+     * Évaluation groupée pour un stagiaire : tous les éléments ou aucun.
+     * Les règles sont vérifiées comme si les éléments étaient saisis l'un après l'autre (compétences de fin de formation
+     * en dernier), ce qui permet de valider dans la même saisie une compétence et celle qui en dépend.
+     * @return int nombre d'évaluations enregistrées
+     */
+    public function evaluateMany(User $u, Enrolment $e, array $skills, string $status, \DateTimeImmutable $date, string $place, ?string $site, ?int $depth, ?string $comment): int
+    {
+        $cur = self::curriculumOf($e);
+        if (self::isTeaching($e)) throw new BadRequestHttpException('La formation initiateur s\'évalue par séances');
+        if ($e->getStatus() !== 'active') throw new BadRequestHttpException('Suivi clôturé');
+        if (!isset(Mft::STATUSES[$status])) throw new BadRequestHttpException('Statut invalide (ECA, A ou V)');
+        if (!isset(Mft::PLACES[$place])) throw new BadRequestHttpException('Lieu invalide');
+        if ($date > new \DateTimeImmutable('tomorrow')) throw new BadRequestHttpException('La date ne peut pas être dans le futur');
+        $final = fn (string $k) => (bool) (Mft::competencyOf($cur, $k)['final'] ?? false);
+        foreach ($skills as $k) if (!Mft::competencyOf($cur, $k)) throw new BadRequestHttpException("Élément inconnu pour le $cur[name]");
+        usort($skills, fn ($a, $b) => $final($a) <=> $final($b));
+        if ($status === 'V') {
+            $statuses = $this->skillStatuses($e);
+            foreach ($skills as $k) {
+                if ($why = $this->cannotValidate($u, $e, $k, $place, $statuses)) throw new AccessDeniedHttpException($why);
+                $statuses[$k] = 'V';
+            }
+        }
+        foreach ($skills as $k) {
+            $ev = (new Evaluation($e, $k, $status, $date, $place, $u))->setSite($site)->setDepth($depth)->setComment($comment);
+            $this->em->persist($ev);
+            $e->getEvaluations()->add($ev);
+        }
+        return count($skills);
+    }
+
     /** Qualification délivrable ? Renvoie la raison sinon. */
     public function cannotIssue(User $u, Enrolment $e, string $qual): ?string
     {

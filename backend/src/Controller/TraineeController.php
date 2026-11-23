@@ -209,6 +209,43 @@ class TraineeController extends ApiController
         return $this->json($this->fiche($e->getDiver()), 201);
     }
 
+    /**
+     * Évaluation groupée depuis le tableau de section : mêmes éléments, même résultat pour plusieurs stagiaires.
+     * {"enrolmentIds":[1,2], "skills":["N1.ventiler.masque",…], "status":"A", "date", "place", "site"?, "depth"?, "comment"?}
+     * Chaque stagiaire est traité à part (tout ou rien) : le résultat indique ceux qui ont été refusés et pourquoi.
+     */
+    #[Route('/api/evaluations/bulk', methods: 'POST')]
+    public function bulk(Request $req): JsonResponse
+    {
+        $d = $this->body($req);
+        $ids = array_values(array_unique(array_map('intval', (array) ($d['enrolmentIds'] ?? []))));
+        $skills = array_values(array_unique(array_map('strval', (array) ($d['skills'] ?? []))));
+        if (!$ids) throw new BadRequestHttpException('Choisissez au moins un stagiaire');
+        if (!$skills) throw new BadRequestHttpException('Choisissez au moins un élément');
+        if (count($ids) > 100) throw new BadRequestHttpException('100 stagiaires au plus à la fois');
+        $depth = isset($d['depth']) && $d['depth'] !== '' && $d['depth'] !== null ? (int) $d['depth'] : null;
+        if ($depth !== null && ($depth < 0 || $depth > 120)) throw new BadRequestHttpException('Profondeur invalide');
+        $date = $this->day($d['date'] ?? 'today');
+        $site = $this->text($d['site'] ?? null, 120, 'Lieu');
+        $comment = $this->text($d['comment'] ?? null, 2000, 'Commentaire');
+
+        $results = [];
+        foreach ($ids as $id) {
+            $e = $this->em->find(Enrolment::class, $id);
+            if (!$e) { $results[] = ['enrolmentId' => $id, 'name' => null, 'ok' => false, 'count' => 0, 'error' => 'Suivi introuvable']; continue; }
+            $row = ['enrolmentId' => $id, 'diverId' => $e->getDiver()->getId(), 'name' => $e->getDiver()->getFullName()];
+            try {
+                $this->training->assertCanEvaluate($this->getUser(), $e->getDiver());
+                $n = $this->training->evaluateMany($this->getUser(), $e, $skills, (string) ($d['status'] ?? ''), $date, (string) ($d['place'] ?? ''), $site, $depth, $comment);
+                $results[] = $row + ['ok' => true, 'count' => $n, 'error' => null];
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $ex) {
+                $results[] = $row + ['ok' => false, 'count' => 0, 'error' => $ex->getMessage()];
+            }
+        }
+        $this->em->flush();
+        return $this->json(['results' => $results, 'saved' => count(array_filter($results, fn ($r) => $r['ok']))]);
+    }
+
     /** Supprime une évaluation (erreur de saisie) : son auteur ou un référent. */
     #[Route('/api/evaluations/{id}', methods: 'DELETE', requirements: ['id' => '\d+'])]
     public function deleteEvaluation(Evaluation $ev): JsonResponse

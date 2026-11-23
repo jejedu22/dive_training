@@ -315,4 +315,41 @@ class TraineeTest extends ApiTestCase
         [, $f] = $this->call('DELETE', "/api/enrolments/$e/complement/1", null, $this->inst);
         $this->assertFalse($f['enrolments'][0]['complement']['complete']);
     }
+
+    public function testBulkEvaluation(): void
+    {
+        $this->level('inst@x.fr', 'E2');
+        $e = [];
+        foreach (['Léa', 'Hugo', 'Inès'] as $name) {
+            [, $t] = $this->call('POST', '/api/trainees', ['firstName' => $name, 'lastName' => 'X', 'sectionId' => $this->section, 'curriculum' => 'N2'], $this->inst);
+            $e[] = $t['enrolments'][0]['id'];
+        }
+        $other = $this->call('POST', '/api/sections', ['name' => 'Autre'], $this->ref)[1]['id'];
+        [, $t] = $this->call('POST', '/api/trainees', ['firstName' => 'Zoé', 'lastName' => 'Y', 'sectionId' => $other, 'curriculum' => 'N2'], $this->ref);
+        $e[] = $t['enrolments'][0]['id'];
+        $skills = fn (string $key) => array_keys(array_values(array_filter(Mft::curriculum('N2')['competencies'], fn ($c) => $c['key'] === $key))[0]['skills']);
+
+        // plusieurs compétences, plusieurs stagiaires, même résultat ; Zoé n'est pas dans la section de l'encadrant
+        [$code, $r] = $this->call('POST', '/api/evaluations/bulk', ['enrolmentIds' => $e, 'skills' => [...$skills('N2.ventiler'), ...$skills('N2.communiquer')], 'status' => 'A', 'place' => 'pit', 'comment' => 'Séance fosse'], $this->inst);
+        $this->assertSame(200, $code);
+        $this->assertSame(3, $r['saved']);
+        $this->assertSame([true, true, true, false], array_column($r['results'], 'ok'));
+        $this->assertSame(4, $r['results'][0]['count']);
+        $this->assertStringContainsString('sections du stagiaire', $r['results'][3]['error']);
+
+        // Validé en fosse refusé (N2 : milieu naturel), sans rien enregistrer
+        [, $r] = $this->call('POST', '/api/evaluations/bulk', ['enrolmentIds' => [$e[0]], 'skills' => $skills('N2.ventiler'), 'status' => 'V', 'place' => 'pit'], $this->inst);
+        $this->assertStringContainsString('milieu naturel', $r['results'][0]['error']);
+        // toutes les compétences PE40, dont « Intervenir en relai » (fin de formation), validées dans la même saisie
+        $pe40 = [];
+        foreach (['N2.equiper', 'N2.immerger', 'N2.milieu', 'N2.ventiler', 'N2.communiquer', 'N2.surface', 'N2.theoriePE40'] as $k) $pe40 = [...$pe40, ...$skills($k)];
+        [, $r] = $this->call('POST', '/api/evaluations/bulk', ['enrolmentIds' => [$e[1]], 'skills' => [...$skills('N2.relai'), ...$pe40], 'status' => 'V', 'place' => 'natural', 'depth' => 18], $this->inst);
+        $this->assertTrue($r['results'][0]['ok'], (string) $r['results'][0]['error']);
+        // relai seul pour Léa : refusé (les autres compétences PE40 ne sont pas validées)
+        [, $r] = $this->call('POST', '/api/evaluations/bulk', ['enrolmentIds' => [$e[0]], 'skills' => $skills('N2.relai'), 'status' => 'V', 'place' => 'natural'], $this->inst);
+        $this->assertStringContainsString('fin de formation', $r['results'][0]['error']);
+        [, $f] = $this->call('GET', "/api/trainees/{$t['id']}", null, $this->ref);
+        $this->assertCount(0, $f['enrolments'][0]['evaluations'], 'rien pour Zoé');
+        $this->assertSame(400, $this->call('POST', '/api/evaluations/bulk', ['enrolmentIds' => [], 'skills' => ['x'], 'status' => 'A', 'place' => 'pool'], $this->inst)[0]);
+    }
 }
