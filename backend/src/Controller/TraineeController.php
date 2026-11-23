@@ -166,7 +166,7 @@ class TraineeController extends ApiController
             $e->setDossier($dossier);
             // la date du stage initial vaut prérequis « stage initial réalisé »
             $p = $e->getPrerequisites();
-            $label = 'Stage initial réalisé (14 h, encadré par un E4)';
+            $label = Mft::INIT_STAGE;
             if (isset($dossier['stageInitial'])) $p[$label] = ['date' => $dossier['stageInitial']['date'], 'by' => $this->getUser()->getName(), 'note' => $dossier['stageInitial']['ctr']]; else unset($p[$label]);
             $e->setPrerequisites($p);
         }

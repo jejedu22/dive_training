@@ -114,3 +114,12 @@ export interface Board {
   rows: { diverId: number; firstName: string; lastName: string; enrolmentId: number; progress: EnrolmentSummary['progress']; deadline: string | null
     cells: { key: string; status: SkillStatus; detail: string | null }[]; issuable: string[] }[]
 }
+/** Administration des cursus. */
+export interface CurriculumMeta {
+  code: string; name: string; type: 'diver' | 'teaching'; version: string; origin: 'mft' | 'modified' | 'club'
+  updatedAt: string | null; updatedBy: string | null; enrolments: number
+}
+export interface CurriculumDetail extends Omit<CurriculumMeta, 'enrolments'> {
+  definition: MftCurriculum
+  usage: { enrolments: number; skills: Record<string, number>; modules: Record<string, number>; requirements: Record<string, number> }
+}

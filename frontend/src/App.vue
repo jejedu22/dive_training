@@ -23,7 +23,7 @@ const nav = computed(() => [
   { to: '/sections', label: 'Sections', short: 'Sections', icon: 'users' },
   { to: '/slots', label: 'Créneaux', short: 'Créneaux', icon: 'clock' },
   ...(auth.isReferent ? [{ to: '/pools', label: 'Bassins', short: 'Bassins', icon: 'pool' }] : []),
-  ...(auth.isAdmin ? [{ to: '/users', label: 'Comptes', short: 'Comptes', icon: 'shield' }] : []),
+  ...(auth.isAdmin ? [{ to: '/cursus', label: 'Cursus', short: 'Cursus', icon: 'star' }, { to: '/users', label: 'Comptes', short: 'Comptes', icon: 'shield' }] : []),
 ])
 // Sur mobile : 4 onglets principaux + « Plus »
 const mobileMain = computed(() => nav.value.slice(0, 3))

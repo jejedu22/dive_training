@@ -23,6 +23,8 @@ const router = createRouter({
     { path: '/sections', component: () => import('./views/SectionsView.vue'), meta: { title: 'Sections' } },
     { path: '/slots', component: () => import('./views/SlotsView.vue'), meta: { title: 'Créneaux' } },
     { path: '/pools', component: () => import('./views/PoolsView.vue'), meta: { referent: true, title: 'Bassins' } },
+    { path: '/cursus', component: () => import('./views/CurriculaView.vue'), meta: { admin: true, title: 'Cursus' } },
+    { path: '/cursus/:code', component: () => import('./views/CurriculumEditView.vue'), props: true, meta: { admin: true, title: 'Modifier un cursus' } },
     { path: '/users', component: () => import('./views/UsersView.vue'), meta: { admin: true, title: 'Comptes' } },
     { path: '/account', component: () => import('./views/AccountView.vue'), meta: { title: 'Mon compte' } },
     { path: '/:pathMatch(.*)*', redirect: '/planning' },

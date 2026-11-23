@@ -280,7 +280,7 @@ final class TrainingService
             $st = $e->getModules()[$m['key']] ?? [];
             if (!isset($st['validated']) && !isset($st['exempted'])) $missing[] = $m['title'];
         }
-        foreach (['Stage initial réalisé (14 h, encadré par un E4)', 'RIFA Plongée'] as $p) if (empty($e->getPrerequisites()[$p])) $missing[] = $p;
+        foreach ([Mft::INIT_STAGE, Mft::INIT_RIFA] as $p) if (empty($e->getPrerequisites()[$p])) $missing[] = $p;
         return $missing ? 'Il manque : ' . implode(', ', $missing) . '.' : null;
     }
 

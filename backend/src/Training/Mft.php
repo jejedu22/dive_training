@@ -18,11 +18,31 @@ namespace App\Training;
 final class Mft
 {
     public const LEVELS = ['E1', 'E2', 'E3', 'E4'];
+    /** Prérequis de l'initiateur utilisés par les règles (stage initial, examen) : non modifiables. */
+    public const INIT_STAGE = 'Stage initial réalisé (14 h, encadré par un E4)';
+    public const INIT_RIFA = 'RIFA Plongée';
     public const PLACES = ['pool' => 'Piscine', 'pit' => 'Fosse', 'natural' => 'Milieu naturel'];
     public const STATUSES = ['ECA' => 'En cours d\'acquisition', 'A' => 'Acquis', 'V' => 'Validé'];
 
-    /** @return array<string, array> */
+    /** @var null|\Closure(): array<string, array> chargement des cursus enregistrés (voir Referential) */
+    private static ?\Closure $loader = null;
+    private static ?array $cache = null;
+
+    /** Branché à chaque requête par Referential : les cursus modifiés par les administrateurs remplacent les valeurs par défaut. */
+    public static function setLoader(?\Closure $loader): void
+    {
+        self::$loader = $loader;
+        self::$cache = null;
+    }
+
+    /** Cursus en vigueur (modifiés en base, sinon valeurs par défaut du MFT). @return array<string, array> */
     public static function curricula(): array
+    {
+        return self::$cache ??= (self::$loader ? (self::$loader)() : self::defaults());
+    }
+
+    /** Valeurs par défaut, d'après les manuels FFESSM. @return array<string, array> */
+    public static function defaults(): array
     {
         return [
             'N1' => [
