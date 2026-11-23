@@ -26,7 +26,7 @@ final class Mft
     {
         return [
             'N1' => [
-                'code' => 'N1', 'name' => 'Niveau 1', 'subtitle' => 'Plongeur encadré à 20 m (PE20)', 'version' => 'MFT décembre 2025',
+                'type' => 'diver', 'code' => 'N1', 'name' => 'Niveau 1', 'subtitle' => 'Plongeur encadré à 20 m (PE20)', 'version' => 'MFT décembre 2025',
                 'qualifications' => ['N1' => 'Niveau 1 (PE20)'],
                 // Enseignement et validation de 0 à 6 m par un E1 minimum ; délivrance : président du club ou E3 minimum
                 'validateLevel' => 'E1', 'issueLevel' => 'E3', 'presidentMayIssue' => true, 'naturalOnly' => false, 'delayMonths' => 15,
@@ -47,7 +47,7 @@ final class Mft
                 ],
             ],
             'N2' => [
-                'code' => 'N2', 'name' => 'Niveau 2', 'subtitle' => 'Plongeur autonome à 20 m (PA20) · Plongeur encadré à 40 m (PE40)', 'version' => 'MFT mai 2026',
+                'type' => 'diver', 'code' => 'N2', 'name' => 'Niveau 2', 'subtitle' => 'Plongeur autonome à 20 m (PA20) · Plongeur encadré à 40 m (PE40)', 'version' => 'MFT mai 2026',
                 'qualifications' => ['PA20' => 'PA20 – Autonome à 20 m', 'PE40' => 'PE40 – Encadré à 40 m', 'N2' => 'Niveau 2'],
                 // Enseignement et validation de 0 à 20 m par un E2 minimum, en milieu naturel ; délivrance : E3 minimum
                 'validateLevel' => 'E2', 'issueLevel' => 'E3', 'presidentMayIssue' => false, 'naturalOnly' => true, 'delayMonths' => 15,
@@ -70,7 +70,7 @@ final class Mft
                 ],
             ],
             'N3' => [
-                'code' => 'N3', 'name' => 'Niveau 3', 'subtitle' => 'Plongeur autonome à 40 m (PA40) · Encadré à 60 m (PE60) · Autonome à 60 m (PA60)', 'version' => 'MFT décembre 2025',
+                'type' => 'diver', 'code' => 'N3', 'name' => 'Niveau 3', 'subtitle' => 'Plongeur autonome à 40 m (PA40) · Encadré à 60 m (PE60) · Autonome à 60 m (PA60)', 'version' => 'MFT décembre 2025',
                 'qualifications' => ['PA40' => 'PA40 – Autonome à 40 m', 'PE60' => 'PE60 – Encadré à 60 m', 'N3' => 'Niveau 3 (PA60)'],
                 // Enseignement et validation de 0 à 40 m par un E3 minimum, en milieu naturel ; délivrance : E3 minimum
                 'validateLevel' => 'E3', 'issueLevel' => 'E3', 'presidentMayIssue' => false, 'naturalOnly' => true, 'delayMonths' => 15,
@@ -87,7 +87,73 @@ final class Mft
                     self::c('N3.theorie', 'Connaissances théoriques PA40 – N3', ['PA40', 'N3'], ['activite' => 'Théorie de l\'activité', 'accidents' => 'Accidents', 'desaturation' => 'Procédures de désaturation', 'reglementation' => 'Réglementation', 'milieu' => 'Milieu et environnement'], group: 'Connaissances théoriques', theory: true),
                 ],
             ],
+            'INIT' => self::initiator(),
         ];
+    }
+
+    /**
+     * Formation Initiateur (E1), d'après le livret pédagogique Initiateur FFESSM (février 2020).
+     * Stage en situation encadré par un E4 ou un E3 titulaire du TSI : trois modules évalués par séances.
+     * Modules 1 et 2 : au moins 5 séances complètes dont 2 validées, sur des thèmes et des niveaux de plongeurs différents.
+     * Une séance est complète quand toutes ses phases sont réalisées, validée quand toutes sont acquises.
+     */
+    private static function initiator(): array
+    {
+        return [
+            'type' => 'teaching', 'code' => 'INIT', 'name' => 'Initiateur', 'subtitle' => 'Initiateur de club (E1) – stage en situation', 'version' => 'Livret pédagogique février 2020',
+            'qualifications' => ['INIT' => 'Initiateur (examen réussi)'],
+            'validateLevel' => 'E3', 'issueLevel' => 'E3', 'presidentMayIssue' => false, 'naturalOnly' => false, 'delayMonths' => 36,
+            'tutor' => 'E4, ou E3 titulaire de l\'attestation TSI',
+            'prerequisites' => ['Licence FFESSM en cours de validité', 'Stage initial réalisé (14 h, encadré par un E4)', 'RIFA Plongée', '12 plongées après le PA20 (titulaires du PA20 seulement)'],
+            'notes' => [
+                'Livret pédagogique valable 3 ans à partir du stage initial.',
+                'Stage en situation encadré par un E4 ou un E3 titulaire du TSI.',
+                'Examen organisé par une CTR (ou par délégation), en présence d\'un délégué CTR E4.',
+            ],
+            'levelsTaught' => ['N1', 'PE20', 'PA20', 'PE40', 'N2', 'PA40', 'PE60', 'N3', 'Baptême', 'Autre'],
+            'competencies' => [],
+            'modules' => [
+                [
+                    'key' => 'm1', 'title' => 'Enseignement pratique entre 0 et 6 mètres et théorie associée',
+                    'minSessions' => 5, 'minValidated' => 2, 'distinct' => true, 'exemptable' => 'Dispense possible si le module correspondant du MF1 (enseignement pratique entre 0 et 6 m) a été validé en stage en situation MF1.',
+                    'phases' => [
+                        'Concevoir' => ['objectifs' => 'Définir les objectifs de formation', 'cursus' => 'Positionner le thème dans le cursus', 'justifier' => 'Justifier la séance', 'strategie' => 'Définir une stratégie d\'enseignement'],
+                        'Réaliser' => ['accueillir' => 'Accueillir les plongeurs', 'animer' => 'Animer une séance et communiquer', 'mettre' => 'Mettre en œuvre une stratégie de formation'],
+                        'Évaluer' => ['evaluer' => 'Réaliser une évaluation adaptée (initiale, finale, formative…)'],
+                    ],
+                    'requirements' => [],
+                ],
+                [
+                    'key' => 'm2', 'title' => 'Organiser et sécuriser l\'activité',
+                    'minSessions' => 5, 'minValidated' => 2, 'distinct' => true, 'exemptable' => null,
+                    'phases' => [
+                        'Organisation' => ['accueillir' => 'Accueillir les plongeurs', 'deroulement' => 'Organiser le déroulement d\'une séance pratique', 'securiser' => 'Sécuriser et surveiller', 'reagir' => 'Réagir en cas d\'accident'],
+                    ],
+                    'requirements' => ['mannequin' => 'Épreuve du mannequin de l\'IPD réalisée dans sa totalité', 'intervention' => 'Intervention réussie sur un plongeur en difficulté, avec scaphandre'],
+                ],
+                [
+                    'key' => 'm3', 'title' => 'Organiser un cursus de formation',
+                    'minSessions' => 1, 'minValidated' => 1, 'distinct' => false, 'exemptable' => null,
+                    'help' => 'Validé dès lors que l\'ensemble des items est acquis sur l\'ensemble des cursus couverts par les prérogatives de l\'initiateur.',
+                    'phases' => [
+                        'Organiser' => ['nature' => 'Identifier la nature du cursus à organiser', 'planifier' => 'Planifier', 'logistique' => 'Définir une logistique matérielle', 'humains' => 'Définir les moyens humains'],
+                    ],
+                    'requirements' => [],
+                ],
+            ],
+        ];
+    }
+
+    public static function module(array $curriculum, string $key): ?array
+    {
+        foreach ($curriculum['modules'] ?? [] as $m) if ($m['key'] === $key) return $m;
+        return null;
+    }
+
+    /** Items d'un module : clé => libellé. */
+    public static function moduleItems(array $module): array
+    {
+        return array_merge(...array_values($module['phases']));
     }
 
     public static function curriculum(string $code): ?array { return self::curricula()[$code] ?? null; }

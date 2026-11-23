@@ -1,7 +1,7 @@
 <?php
 namespace App\Controller;
 
-use App\Entity\{Diver, Enrolment, Evaluation, Section};
+use App\Entity\{Diver, Enrolment, Evaluation, Section, TeachingSession};
 use App\Service\Presenter;
 use App\Training\{Mft, TrainingService};
 use Doctrine\ORM\EntityManagerInterface;
@@ -112,6 +112,18 @@ class TraineeController extends ApiController
             $e->setStatus($d['status']);
         }
         if (!empty($d['startedAt'])) $e->setStartedAt($this->day($d['startedAt']));
+        if (isset($d['dossier']['stageInitial'])) {
+            $si = $d['dossier']['stageInitial'];
+            $dossier = $e->getDossier();
+            if ($si === null || empty($si['date'])) unset($dossier['stageInitial']);
+            else $dossier['stageInitial'] = ['date' => $this->day($si['date'])->format('Y-m-d'), 'ctr' => $this->text($si['ctr'] ?? null, 80, 'CTR')];
+            $e->setDossier($dossier);
+            // la date du stage initial vaut prérequis « stage initial réalisé »
+            $p = $e->getPrerequisites();
+            $label = 'Stage initial réalisé (14 h, encadré par un E4)';
+            if (isset($dossier['stageInitial'])) $p[$label] = true; else unset($p[$label]);
+            $e->setPrerequisites($p);
+        }
         $this->em->flush();
         return $this->json($this->fiche($e->getDiver()));
     }
@@ -121,7 +133,7 @@ class TraineeController extends ApiController
     public function deleteEnrolment(Enrolment $e): JsonResponse
     {
         if (!$this->getUser()->isReferent()) throw new AccessDeniedHttpException('Réservé aux référents');
-        if (!$e->getEvaluations()->isEmpty()) throw new ConflictHttpException('Ce suivi contient des évaluations : marquez-le plutôt « abandonné »');
+        if (!$e->getEvaluations()->isEmpty() || !$e->getSessions()->isEmpty()) throw new ConflictHttpException('Ce suivi contient des évaluations : marquez-le plutôt « abandonné »');
         $diver = $e->getDiver();
         $diver->getEnrolments()->removeElement($e);
         $this->em->remove($e);
@@ -190,6 +202,87 @@ class TraineeController extends ApiController
         unset($issued[$qualification]);
         $e->setIssued($issued);
         if ($qualification === $e->getCurriculum() && $e->getStatus() === 'done') $e->setStatus('active');
+        $this->em->flush();
+        return $this->json($this->fiche($e->getDiver()));
+    }
+
+    // --------------------------------------------------------------- Formation Initiateur
+
+    /**
+     * Séance pédagogique : {"module":"m1","date","level":"N1","theme":"Vidage de masque",
+     *  "items":{"objectifs":"A","animer":"ECA",…}, "comment"?}
+     */
+    #[Route('/api/enrolments/{id}/sessions', methods: 'POST', requirements: ['id' => '\d+'])]
+    public function addSession(Enrolment $e, Request $req): JsonResponse
+    {
+        $this->training->assertCanEvaluate($this->getUser(), $e->getDiver());
+        $d = $this->body($req);
+        $this->training->recordSession($this->getUser(), $e, (string) ($d['module'] ?? ''), $this->day($d['date'] ?? 'today'),
+            $this->text($d['level'] ?? null, 30, 'Niveau'), $this->text($d['theme'] ?? null, 160, 'Thème'), (array) ($d['items'] ?? []), $this->text($d['comment'] ?? null, 2000, 'Commentaire'));
+        $this->em->flush();
+        return $this->json($this->fiche($e->getDiver()), 201);
+    }
+
+    #[Route('/api/sessions/{id}', methods: 'DELETE', requirements: ['id' => '\d+'])]
+    public function deleteSession(TeachingSession $s): JsonResponse
+    {
+        $u = $this->getUser();
+        if (!$u->isReferent() && $s->getInstructor() !== $u) throw new AccessDeniedHttpException('Seul l\'auteur de la séance ou un référent peut la supprimer');
+        $e = $s->getEnrolment();
+        $st = $e->getModules()[$s->getModule()] ?? [];
+        if (isset($st['validated'])) throw new BadRequestHttpException('Le module est validé : annulez d\'abord sa validation');
+        $e->getSessions()->removeElement($s);
+        $this->em->remove($s);
+        $this->em->flush();
+        return $this->json($this->fiche($e->getDiver()));
+    }
+
+    /**
+     * Action sur un module : validate (tuteur), exempt (tuteur, module 1 : dispense MF1), requirement (exigence pratique réussie),
+     * et leurs annulations (référent ou tuteur) : {"action":"validate"|"exempt"|"requirement", "key"?, "date"?, "undo"?: true}
+     */
+    #[Route('/api/enrolments/{id}/modules/{module}', methods: 'POST', requirements: ['id' => '\d+'])]
+    public function module(Enrolment $e, string $module, Request $req): JsonResponse
+    {
+        $u = $this->getUser();
+        $this->training->assertCanEvaluate($u, $e->getDiver());
+        if (!TrainingService::isTeaching($e)) throw new BadRequestHttpException('Ce cursus n\'a pas de modules');
+        $def = Mft::module(TrainingService::curriculumOf($e), $module) ?? throw $this->createNotFoundException('Module inconnu');
+        if ($e->getStatus() === 'done') throw new BadRequestHttpException('Ce cursus est clôturé');
+        $d = $this->body($req);
+        $undo = !empty($d['undo']);
+        $mods = $e->getModules();
+        $st = $mods[$module] ?? [];
+        $stamp = ['date' => $this->day($d['date'] ?? 'today')->format('Y-m-d'), 'by' => $u->getName()];
+        $tutorOrRef = TrainingService::isTutor($u) || $u->isReferent();
+
+        switch ($d['action'] ?? '') {
+            case 'validate':
+                if ($undo) {
+                    if (!$tutorOrRef) throw new AccessDeniedHttpException('Réservé au tuteur ou aux référents');
+                    unset($st['validated']);
+                } else {
+                    if ($why = $this->training->cannotValidateModule($u, $e, $def)) throw new AccessDeniedHttpException($why);
+                    $st['validated'] = $stamp;
+                }
+                break;
+            case 'exempt':
+                if (!$def['exemptable']) throw new BadRequestHttpException('Ce module ne peut pas être dispensé');
+                if (!$undo && !TrainingService::isTutor($u)) throw new AccessDeniedHttpException('La dispense est accordée par le tuteur de stage (E4, ou E3 titulaire du TSI)');
+                if ($undo && !$tutorOrRef) throw new AccessDeniedHttpException('Réservé au tuteur ou aux référents');
+                if ($undo) unset($st['exempted']); else $st['exempted'] = $stamp;
+                break;
+            case 'requirement':
+                $key = (string) ($d['key'] ?? '');
+                if (!isset($def['requirements'][$key])) throw new BadRequestHttpException('Exigence inconnue');
+                if (isset($st['validated'])) throw new BadRequestHttpException('Le module est validé');
+                if ($undo) unset($st['requirements'][$key]); else $st['requirements'][$key] = $stamp;
+                break;
+            default:
+                throw new BadRequestHttpException('Action inconnue');
+        }
+        $mods[$module] = $st;
+        $e->setModules($mods);
         $this->em->flush();
         return $this->json($this->fiche($e->getDiver()));
     }

@@ -59,7 +59,12 @@ export interface ShareLink { id: number; token: string; label: string | null; cr
 export type SkillStatus = 'NT' | 'ECA' | 'A' | 'V'
 export type Place = 'pool' | 'pit' | 'natural'
 export interface MftCompetency { key: string; title: string; group: string | null; quals: string[]; skills: Record<string, string>; final: boolean; theory: boolean; natural: boolean }
+export interface MftModule {
+  key: string; title: string; minSessions: number; minValidated: number; distinct: boolean; exemptable: string | null; help?: string
+  phases: Record<string, Record<string, string>>; requirements: Record<string, string>
+}
 export interface MftCurriculum {
+  type: 'diver' | 'teaching'; modules?: MftModule[]; tutor?: string; levelsTaught?: string[]
   code: string; name: string; subtitle: string; version: string; qualifications: Record<string, string>
   validateLevel: InstructorLevel; issueLevel: InstructorLevel; presidentMayIssue: boolean; naturalOnly: boolean; delayMonths: number
   prerequisites: string[]; notes: string[]; competencies: MftCompetency[]
@@ -81,6 +86,18 @@ export interface Enrolment extends EnrolmentSummary {
   skills: Record<string, { status: SkillStatus; last: EvaluationEntry | null; validate: { natural: string | null; pool: string | null } }>
   evaluations: EvaluationEntry[]
   qualifications: { code: string; label: string; issued: { date: string; by: string } | null; cannotIssue: string | null }[]
+  // Formation Initiateur
+  modules?: ModuleState[]; dossier?: { stageInitial?: { date: string; ctr: string | null } }; canTutor?: boolean
+}
+export type Stamp = { date: string; by: string }
+export interface TeachingSessionEntry {
+  id: number; date: string; level: string | null; theme: string | null; items: Record<string, 'A' | 'ECA' | 'NT'>
+  comment: string | null; instructor: string; instructorId: number | null; complete: boolean; validated: boolean
+}
+export interface ModuleState {
+  key: string; validated: Stamp | null; exempted: Stamp | null; requirements: Record<string, Stamp>
+  counts: { sessions: number; complete: number; validated: number; themes: number; levels: number }
+  cannotValidate: string | null; sessions: TeachingSessionEntry[]
 }
 export interface SectionRef { id: number; name: string; color: string }
 export interface TraineeSummary extends Diver { licence: string | null; archived: boolean; sections: SectionRef[]; enrolments: EnrolmentSummary[] }

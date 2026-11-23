@@ -1,7 +1,7 @@
 <?php
 namespace App\Training;
 
-use App\Entity\{Diver, Enrolment, Evaluation, Section, User};
+use App\Entity\{Diver, Enrolment, Evaluation, Section, TeachingSession, User};
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\HttpKernel\Exception\{AccessDeniedHttpException, BadRequestHttpException};
 
@@ -113,6 +113,7 @@ final class TrainingService
         $cur = self::curriculumOf($e);
         if (!isset($cur['qualifications'][$qual])) return 'Qualification inconnue';
         if (isset($e->getIssued()[$qual])) return 'Déjà délivrée';
+        if (self::isTeaching($e)) return $this->cannotRecordExam($u, $e);
         $mayIssue = Mft::levelRank($u->getLevel()) >= Mft::levelRank($cur['issueLevel']) || ($cur['presidentMayIssue'] && $u->canIssue());
         if (!$mayIssue) return sprintf('Délivrance réservée aux encadrants %s minimum%s.', $cur['issueLevel'], $cur['presidentMayIssue'] ? ' ou au président du club' : '');
         $statuses = $this->skillStatuses($e);
@@ -125,6 +126,11 @@ final class TrainingService
     public function deadline(Enrolment $e): ?array
     {
         $cur = self::curriculumOf($e);
+        if (self::isTeaching($e)) {
+            // livret pédagogique valable 3 ans à partir du stage initial
+            $d = $e->getDossier()['stageInitial']['date'] ?? null;
+            return $d ? ['firstValidatedAt' => new \DateTimeImmutable($d), 'deadline' => (new \DateTimeImmutable($d))->modify("+{$cur['delayMonths']} months")] : null;
+        }
         $statuses = [];
         $first = null;
         // une compétence est « délivrée » le jour où son dernier élément est validé
@@ -140,6 +146,13 @@ final class TrainingService
     /** Progression : nombre de compétences validées / total. */
     public function progress(Enrolment $e): array
     {
+        if (self::isTeaching($e)) {
+            $mods = self::curriculumOf($e)['modules'];
+            $state = $e->getModules();
+            $done = count(array_filter($mods, fn ($m) => isset($state[$m['key']]['validated']) || isset($state[$m['key']]['exempted'])));
+            $started = count(array_filter($mods, fn ($m) => $this->sessionsOf($e, $m['key']) || isset($state[$m['key']])));
+            return ['validated' => $done, 'started' => $started, 'total' => count($mods)];
+        }
         $statuses = $this->skillStatuses($e);
         $comps = self::curriculumOf($e)['competencies'];
         $done = count(array_filter($comps, fn ($c) => self::competencyStatus($c, $statuses) === 'V'));
@@ -163,6 +176,15 @@ final class TrainingService
         ];
         if (!$full) return $data;
         $data['prerequisites'] = array_map(fn ($label) => ['label' => $label, 'done' => !empty($e->getPrerequisites()[$label])], $cur['prerequisites']);
+        if (self::isTeaching($e)) {
+            $data['dossier'] = $e->getDossier();
+            $data['modules'] = array_map(fn ($m) => $this->moduleState($viewer, $e, $m), $cur['modules']);
+            $data['qualifications'] = array_map(fn ($q) => ['code' => $q, 'label' => $cur['qualifications'][$q], 'issued' => $e->getIssued()[$q] ?? null, 'cannotIssue' => $this->cannotIssue($viewer, $e, $q)], array_keys($cur['qualifications']));
+            $data['canTutor'] = self::isTutor($viewer);
+            $data += ['competencies' => [], 'skills' => new \stdClass(), 'evaluations' => []];
+            return $data;
+        }
+        $data['prerequisites'] = array_map(fn ($label) => ['label' => $label, 'done' => !empty($e->getPrerequisites()[$label])], $cur['prerequisites']);
         $data['competencies'] = array_map(fn ($c) => ['key' => $c['key'], 'status' => self::competencyStatus($c, $statuses)], $cur['competencies']);
         $data['skills'] = array_map(fn ($k) => [
             'status' => $statuses[$k],
@@ -181,6 +203,117 @@ final class TrainingService
             'id' => $ev->getId(), 'skill' => $ev->getSkill(), 'status' => $ev->getStatus(), 'date' => $ev->getDate()->format('Y-m-d'),
             'place' => $ev->getPlace(), 'site' => $ev->getSite(), 'depth' => $ev->getDepth(), 'comment' => $ev->getComment(),
             'instructor' => $ev->getInstructorName(), 'instructorId' => $ev->getInstructor()?->getId(),
+        ];
+    }
+
+    // ---------------------------------------------------------------- Formation Initiateur
+
+    public static function isTeaching(Enrolment $e): bool
+    {
+        return (self::curriculumOf($e)['type'] ?? 'diver') === 'teaching';
+    }
+
+    /** Tuteur de stage initiateur : E4, ou E3 titulaire du TSI. */
+    public static function isTutor(User $u): bool
+    {
+        return $u->getLevel() === 'E4' || ($u->getLevel() === 'E3' && $u->isTsi());
+    }
+
+    /** @return TeachingSession[] */
+    public function sessionsOf(Enrolment $e, string $module): array
+    {
+        return array_values(array_filter($e->getSessions()->getValues(), fn (TeachingSession $s) => $s->getModule() === $module));
+    }
+
+    /** complete : toutes les phases réalisées (aucun NT) ; validated : toutes acquises (A). */
+    public static function sessionState(array $module, TeachingSession $s): array
+    {
+        $items = $s->getItems();
+        $values = array_map(fn ($k) => $items[$k] ?? 'NT', array_keys(Mft::moduleItems($module)));
+        return ['complete' => !in_array('NT', $values, true), 'validated' => !array_diff($values, ['A'])];
+    }
+
+    /** Compteurs du module : séances complètes, validées, thèmes et niveaux différents. */
+    public function moduleCounts(Enrolment $e, array $module): array
+    {
+        $complete = $validated = 0;
+        $themes = $levels = [];
+        foreach ($this->sessionsOf($e, $module['key']) as $s) {
+            $st = self::sessionState($module, $s);
+            if (!$st['complete']) continue;
+            $complete++;
+            if ($st['validated']) $validated++;
+            if ($s->getTheme()) $themes[mb_strtolower($s->getTheme())] = true;
+            if ($s->getLevel()) $levels[$s->getLevel()] = true;
+        }
+        return ['sessions' => count($this->sessionsOf($e, $module['key'])), 'complete' => $complete, 'validated' => $validated, 'themes' => count($themes), 'levels' => count($levels)];
+    }
+
+    /** Raison qui empêche $u de valider le module (null = possible). */
+    public function cannotValidateModule(User $u, Enrolment $e, array $module): ?string
+    {
+        $state = $e->getModules()[$module['key']] ?? [];
+        if (isset($state['validated'])) return 'Module déjà validé';
+        if (isset($state['exempted'])) return 'Module dispensé';
+        if (!self::isTutor($u)) return 'Validation réservée au tuteur de stage : E4, ou E3 titulaire du TSI.';
+        $c = $this->moduleCounts($e, $module);
+        $missing = [];
+        if ($c['complete'] < $module['minSessions']) $missing[] = sprintf('%d séance%s complète%s sur %d', $c['complete'], $c['complete'] > 1 ? 's' : '', $c['complete'] > 1 ? 's' : '', $module['minSessions']);
+        if ($c['validated'] < $module['minValidated']) $missing[] = sprintf('%d séance%s validée%s sur %d', $c['validated'], $c['validated'] > 1 ? 's' : '', $c['validated'] > 1 ? 's' : '', $module['minValidated']);
+        if ($module['distinct'] && $c['complete'] >= 2 && ($c['themes'] < 2 || $c['levels'] < 2)) $missing[] = 'des thèmes et des niveaux de plongeurs différents';
+        foreach ($module['requirements'] as $k => $label) if (!isset($state['requirements'][$k])) $missing[] = mb_strtolower(mb_substr($label, 0, 1)) . mb_substr($label, 1);
+        return $missing ? 'Il manque : ' . implode(', ', $missing) . '.' : null;
+    }
+
+    /** Enregistrer la réussite à l'examen : référent, modules validés ou dispensés, stage initial et RIFA Plongée. */
+    public function cannotRecordExam(User $u, Enrolment $e): ?string
+    {
+        if (!$u->isReferent()) return 'Enregistrement du résultat de l\'examen réservé aux référents.';
+        $missing = [];
+        foreach (self::curriculumOf($e)['modules'] as $m) {
+            $st = $e->getModules()[$m['key']] ?? [];
+            if (!isset($st['validated']) && !isset($st['exempted'])) $missing[] = $m['title'];
+        }
+        foreach (['Stage initial réalisé (14 h, encadré par un E4)', 'RIFA Plongée'] as $p) if (empty($e->getPrerequisites()[$p])) $missing[] = $p;
+        return $missing ? 'Il manque : ' . implode(', ', $missing) . '.' : null;
+    }
+
+    /** Enregistre une séance pédagogique : items A, ECA ou NT (absent = NT). */
+    public function recordSession(User $u, Enrolment $e, string $moduleKey, \DateTimeImmutable $date, ?string $level, ?string $theme, array $items, ?string $comment): TeachingSession
+    {
+        $cur = self::curriculumOf($e);
+        $module = Mft::module($cur, $moduleKey) ?? throw new BadRequestHttpException('Module inconnu');
+        if ($e->getStatus() !== 'active') throw new BadRequestHttpException('Ce suivi est clôturé');
+        $state = $e->getModules()[$moduleKey] ?? [];
+        if (isset($state['validated']) || isset($state['exempted'])) throw new BadRequestHttpException('Ce module est déjà validé ou dispensé');
+        if ($date > new \DateTimeImmutable('tomorrow')) throw new BadRequestHttpException('La date ne peut pas être dans le futur');
+        if ($level !== null && !in_array($level, $cur['levelsTaught'], true)) throw new BadRequestHttpException('Niveau travaillé invalide');
+        $allowed = Mft::moduleItems($module);
+        $clean = [];
+        foreach ($items as $k => $v) {
+            if (!isset($allowed[$k])) throw new BadRequestHttpException("Item inconnu : $k");
+            if (!in_array($v, ['A', 'ECA', 'NT'], true)) throw new BadRequestHttpException('Annotation invalide (A, ECA ou NT)');
+            $clean[$k] = $v;
+        }
+        if (!array_diff($clean, ['NT'])) throw new BadRequestHttpException('Notez au moins un item (A ou ECA)');
+        $s = (new TeachingSession($e, $moduleKey, $date, $u))->setLevel($level)->setTheme($theme)->setItems($clean)->setComment($comment);
+        $this->em->persist($s);
+        $e->getSessions()->add($s);
+        return $s;
+    }
+
+    private function moduleState(User $viewer, Enrolment $e, array $module): array
+    {
+        $state = $e->getModules()[$module['key']] ?? [];
+        return [
+            'key' => $module['key'],
+            'validated' => $state['validated'] ?? null, 'exempted' => $state['exempted'] ?? null, 'requirements' => (object) ($state['requirements'] ?? []),
+            'counts' => $this->moduleCounts($e, $module),
+            'cannotValidate' => $this->cannotValidateModule($viewer, $e, $module),
+            'sessions' => array_map(fn (TeachingSession $s) => [
+                'id' => $s->getId(), 'date' => $s->getDate()->format('Y-m-d'), 'level' => $s->getLevel(), 'theme' => $s->getTheme(), 'items' => (object) $s->getItems(),
+                'comment' => $s->getComment(), 'instructor' => $s->getInstructorName(), 'instructorId' => $s->getInstructor()?->getId(),
+            ] + self::sessionState($module, $s), array_reverse($this->sessionsOf($e, $module['key']))),
         ];
     }
 }

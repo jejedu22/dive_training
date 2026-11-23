@@ -37,7 +37,7 @@ class TraineeTest extends ApiTestCase
     public function testReferentialAndTraineeCreation(): void
     {
         [, $mft] = $this->call('GET', '/api/mft', null, $this->inst2 ?? $this->inst);
-        $this->assertSame(['N1', 'N2', 'N3'], array_column($mft['curricula'], 'code'));
+        $this->assertSame(['N1', 'N2', 'N3', 'INIT'], array_column($mft['curricula'], 'code'));
         $this->assertCount(11, $mft['curricula'][0]['competencies']);
 
         // un encadrant crée un stagiaire dans SA section seulement
@@ -174,5 +174,69 @@ class TraineeTest extends ApiTestCase
         [, $u] = $this->call('POST', '/api/users', ['email' => 'new@x.fr', 'name' => 'New', 'password' => 'password1', 'level' => 'E2'], $admin);
         $this->assertSame('E2', $u['level']);
         $this->assertSame('E3', $this->call('GET', '/api/me', null, $this->inst)[1]['level']);
+    }
+
+    public function testInitiatorTraining(): void
+    {
+        [, $t] = $this->call('POST', '/api/trainees', ['firstName' => 'Marc', 'lastName' => 'Petit', 'sectionId' => $this->section, 'curriculum' => 'INIT'], $this->inst);
+        $e = $t['enrolments'][0]['id'];
+        $this->assertSame(['validated' => 0, 'started' => 0, 'total' => 3], $t['enrolments'][0]['progress']);
+        $this->assertCount(3, $t['enrolments'][0]['modules']);
+
+        // dossier : stage initial -> livret valable 3 ans
+        [, $f] = $this->call('PUT', "/api/enrolments/$e", ['dossier' => ['stageInitial' => ['date' => '2026-09-12', 'ctr' => 'CTR Est']]], $this->inst);
+        $this->assertSame('2029-09-12', $f['enrolments'][0]['deadline']);
+        $this->assertTrue($f['enrolments'][0]['prerequisites'][1]['done'], 'stage initial coché');
+
+        $all = fn (string $v, array $keys) => array_fill_keys($keys, $v);
+        $m1 = ['objectifs', 'cursus', 'justifier', 'strategie', 'accueillir', 'animer', 'mettre', 'evaluer'];
+        $session = fn (array $items, string $level, string $theme) => $this->call('POST', "/api/enrolments/$e/sessions", ['module' => 'm1', 'date' => '2026-10-01', 'level' => $level, 'theme' => $theme, 'items' => $items], $this->inst);
+        $this->assertSame(400, $session(['inconnu' => 'A'], 'N1', 'x')[0]);
+        $this->assertSame(400, $session(['animer' => 'A'], 'N9', 'x')[0], 'niveau inconnu');
+        // séance incomplète (un item NT), puis 5 complètes dont 2 validées, sur le même thème et niveau
+        [$code, $f] = $session(['animer' => 'ECA'], 'N1', 'Vidage de masque');
+        $this->assertSame(201, $code);
+        $this->assertFalse($f['enrolments'][0]['modules'][0]['sessions'][0]['complete']);
+        for ($i = 0; $i < 3; $i++) $session($all('ECA', $m1), 'N1', 'Vidage de masque');
+        for ($i = 0; $i < 2; $i++) $session($all('A', $m1), 'N1', 'Vidage de masque');
+        [, $f] = $this->call('GET', "/api/trainees/{$t['id']}", null, $this->inst);
+        $mod = $f['enrolments'][0]['modules'][0];
+        $this->assertSame(['sessions' => 6, 'complete' => 5, 'validated' => 2, 'themes' => 1, 'levels' => 1], $mod['counts']);
+        $this->assertStringContainsString('tuteur', $mod['cannotValidate'], 'inst n\'est pas tuteur');
+
+        // tuteur : E3 + TSI (ou E4) ; thèmes et niveaux différents exigés
+        $em = static::getContainer()->get(EntityManagerInterface::class);
+        $em->getRepository(User::class)->findOneBy(['email' => 'inst@x.fr'])->setLevel('E3')->setTsi(true);
+        $em->flush();
+        [$code, $r] = $this->call('POST', "/api/enrolments/$e/modules/m1", ['action' => 'validate'], $this->inst);
+        $this->assertSame(403, $code);
+        $this->assertStringContainsString('thèmes et des niveaux', $r['message']);
+        $session($all('A', $m1), 'PA20', 'Lâcher-reprise d\'embout');
+        [$code, $f] = $this->call('POST', "/api/enrolments/$e/modules/m1", ['action' => 'validate', 'date' => '2026-10-05'], $this->inst);
+        $this->assertSame(200, $code);
+        $this->assertSame('2026-10-05', $f['enrolments'][0]['modules'][0]['validated']['date']);
+        $this->assertSame(400, $session($all('A', $m1), 'N1', 'x')[0], 'module validé');
+
+        // module 2 : exigences pratiques (mannequin, intervention) ; module 3 dispense refusée
+        $m2 = ['accueillir', 'deroulement', 'securiser', 'reagir'];
+        foreach ([['N1', 'Fosse'], ['PA20', 'Piscine'], ['N1', 'Sortie'], ['PE40', 'Bassin'], ['N2', 'Piscine']] as $i => [$lvl, $th]) {
+            $this->call('POST', "/api/enrolments/$e/sessions", ['module' => 'm2', 'level' => $lvl, 'theme' => $th, 'items' => $all($i < 2 ? 'A' : 'ECA', $m2)], $this->inst);
+        }
+        $this->assertStringContainsString('mannequin', $this->call('POST', "/api/enrolments/$e/modules/m2", ['action' => 'validate'], $this->inst)[1]['message']);
+        $this->call('POST', "/api/enrolments/$e/modules/m2", ['action' => 'requirement', 'key' => 'mannequin'], $this->inst);
+        $this->call('POST', "/api/enrolments/$e/modules/m2", ['action' => 'requirement', 'key' => 'intervention'], $this->inst);
+        $this->assertSame(200, $this->call('POST', "/api/enrolments/$e/modules/m2", ['action' => 'validate'], $this->inst)[0]);
+        $this->assertSame(400, $this->call('POST', "/api/enrolments/$e/modules/m3", ['action' => 'exempt'], $this->inst)[0]);
+        $this->call('POST', "/api/enrolments/$e/sessions", ['module' => 'm3', 'level' => 'N1', 'theme' => 'Cursus N1', 'items' => $all('A', ['nature', 'planifier', 'logistique', 'humains'])], $this->inst);
+        $this->assertSame(200, $this->call('POST', "/api/enrolments/$e/modules/m3", ['action' => 'validate'], $this->inst)[0]);
+
+        // examen : référent, après stage initial et RIFA Plongée cochés
+        [, $f] = $this->call('GET', "/api/trainees/{$t['id']}", null, $this->ref);
+        $this->assertStringContainsString('RIFA', $f['enrolments'][0]['qualifications'][0]['cannotIssue']);
+        $this->assertSame(3, $f['enrolments'][0]['progress']['validated']);
+        $this->call('PUT', "/api/enrolments/$e", ['prerequisites' => ['Stage initial réalisé (14 h, encadré par un E4)' => true, 'RIFA Plongée' => true]], $this->ref);
+        $this->assertSame(403, $this->call('POST', "/api/enrolments/$e/issue", ['qualification' => 'INIT'], $this->inst)[0], 'référents seulement');
+        [$code, $f] = $this->call('POST', "/api/enrolments/$e/issue", ['qualification' => 'INIT', 'date' => '2026-11-20'], $this->ref);
+        $this->assertSame([200, 'done'], [$code, $f['enrolments'][0]['status']]);
     }
 }

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from 'vue'
 import AppIcon from '../components/AppIcon.vue'
 import AppDialog from '../components/AppDialog.vue'
+import InitiatorBook from '../components/InitiatorBook.vue'
 import { del, get, post, put } from '../api'
 import { useAuth } from '../stores/auth'
 import { useToast } from '../stores/toast'
@@ -33,6 +34,7 @@ watch(() => props.id, load)
 
 const enrolment = computed(() => t.value?.enrolments.find((e) => e.id === tab.value) ?? null)
 const cur = computed(() => (enrolment.value ? curriculum(enrolment.value.curriculum) : undefined))
+const teaching = computed(() => cur.value?.type === 'teaching')
 const editable = computed(() => !!t.value?.canEvaluate && enrolment.value?.status === 'active')
 /** Compétences regroupées comme sur la fiche fédérale (communes, spécifiques PA20…). */
 const groups = computed(() => {
@@ -79,6 +81,9 @@ async function enrol() {
   }
 }
 const togglePrereq = (label: string, done: boolean) => run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { prerequisites: { [label]: done } }))
+const stage = ref({ date: '', ctr: '' })
+watch(enrolment, (e) => { stage.value = { date: e?.dossier?.stageInitial?.date ?? '', ctr: e?.dossier?.stageInitial?.ctr ?? '' } }, { immediate: true })
+const saveStage = () => run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { dossier: { stageInitial: stage.value.date ? stage.value : null } }), 'Stage initial enregistré.')
 function setStatus(status: 'active' | 'abandoned') {
   if (status === 'abandoned' && !confirm(`Marquer le ${enrolment.value!.name} comme abandonné ? Les évaluations sont conservées et le suivi pourra être repris.`)) return
   run(() => put<Trainee>(`/enrolments/${enrolment.value!.id}`, { status }), status === 'active' ? 'Suivi repris.' : 'Suivi marqué abandonné.')
@@ -90,7 +95,8 @@ function removeEnrolment() {
 
 // --- Délivrance
 function issue(code: string, label: string) {
-  if (!confirm(`Délivrer « ${label} » à ${t.value!.firstName} ${t.value!.lastName} à la date d'aujourd'hui ?`)) return
+  if (teaching.value && !confirm(`Enregistrer la réussite de ${t.value!.firstName} ${t.value!.lastName} à l'examen initiateur (CTR), à la date d'aujourd'hui ?`)) return
+  if (!teaching.value && !confirm(`Délivrer « ${label} » à ${t.value!.firstName} ${t.value!.lastName} à la date d'aujourd'hui ?`)) return
   run(() => post<Trainee>(`/enrolments/${enrolment.value!.id}/issue`, { qualification: code, date: today() }), `${label} délivré(e).`)
 }
 function unissue(code: string, label: string) {
@@ -197,14 +203,16 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
           <div class="sum-main">
             <h2>{{ cur.name }} <small class="muted">{{ cur.subtitle }}</small></h2>
             <p class="muted small">{{ enrolment.version }} · début le {{ dateFr(enrolment.startedAt) }}
-              <template v-if="enrolment.firstValidatedAt"> · 1re compétence validée le {{ dateFr(enrolment.firstValidatedAt) }}</template></p>
+              <template v-if="enrolment.firstValidatedAt"> · {{ teaching ? 'stage initial le' : '1re compétence validée le' }} {{ dateFr(enrolment.firstValidatedAt) }}</template></p>
             <div class="progress">
               <span class="bar"><span :style="{ width: pct(enrolment) + '%' }" /></span>
-              <strong>{{ enrolment.progress.validated }}/{{ enrolment.progress.total }}</strong> compétences validées
+              <strong>{{ enrolment.progress.validated }}/{{ enrolment.progress.total }}</strong> {{ teaching ? 'modules validés' : 'compétences validées' }}
               <span class="muted">· {{ enrolment.progress.started }} commencée{{ enrolment.progress.started > 1 ? 's' : '' }}</span>
             </div>
             <p v-if="enrolment.deadline && enrolment.status === 'active'" class="small" :class="{ warn: enrolment.deadline < today() }">
-              <AppIcon name="clock" :size="14" /> Toutes les compétences doivent être acquises avant le <strong>{{ dateFr(enrolment.deadline) }}</strong> ({{ cur.delayMonths }} mois après la première).
+              <AppIcon name="clock" :size="14" />
+              <template v-if="teaching"> Livret pédagogique valable jusqu'au <strong>{{ dateFr(enrolment.deadline) }}</strong> (3 ans après le stage initial).</template>
+              <template v-else> Toutes les compétences doivent être acquises avant le <strong>{{ dateFr(enrolment.deadline) }}</strong> ({{ cur.delayMonths }} mois après la première).</template>
             </p>
           </div>
           <div class="sum-actions">
@@ -213,37 +221,45 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
             <template v-if="t.canEvaluate && enrolment.status !== 'done'">
               <button v-if="enrolment.status === 'active'" class="btn btn-ghost btn-sm" @click="setStatus('abandoned')">Marquer abandonné</button>
               <button v-else class="btn btn-secondary btn-sm" @click="setStatus('active')">Reprendre le suivi</button>
-              <button v-if="auth.isReferent && !enrolment.evaluations.length" class="btn btn-danger btn-sm" @click="removeEnrolment">Supprimer</button>
+              <button v-if="auth.isReferent && !enrolment.evaluations.length && !(teaching && enrolment.progress.started)" class="btn btn-danger btn-sm" @click="removeEnrolment">Supprimer</button>
             </template>
           </div>
         </section>
 
         <div class="two">
           <section class="card">
-            <h3>Prérequis</h3>
+            <h3>{{ teaching ? 'Dossier' : 'Prérequis' }}</h3>
+            <form v-if="teaching" class="stage" @submit.prevent="saveStage">
+              <label class="field">Stage initial le<input v-model="stage.date" type="date" :disabled="!t.canEvaluate" /></label>
+              <label class="field">Organisé par (CTR)<input v-model="stage.ctr" maxlength="80" :disabled="!t.canEvaluate" placeholder="ex. CTR Est" /></label>
+              <button v-if="t.canEvaluate" class="btn btn-secondary btn-sm">Enregistrer</button>
+            </form>
             <label v-for="p in enrolment.prerequisites" :key="p.label" class="check">
               <input type="checkbox" :checked="p.done" :disabled="!t.canEvaluate" @change="togglePrereq(p.label, ($event.target as HTMLInputElement).checked)" /> {{ p.label }}
             </label>
             <ul class="notes">
               <li v-for="n in cur.notes" :key="n">{{ n }}</li>
-              <li>Validation : encadrant <strong>{{ cur.validateLevel }}</strong> minimum<template v-if="cur.naturalOnly">, en milieu naturel</template>. Délivrance : <strong>{{ cur.issueLevel }}</strong> minimum<template v-if="cur.presidentMayIssue"> ou président du club</template>.</li>
+              <li v-if="teaching">Modules validés par le tuteur : <strong>{{ cur.tutor }}</strong>. Résultat de l'examen enregistré par un référent.</li>
+              <li v-else>Validation : encadrant <strong>{{ cur.validateLevel }}</strong> minimum<template v-if="cur.naturalOnly">, en milieu naturel</template>. Délivrance : <strong>{{ cur.issueLevel }}</strong> minimum<template v-if="cur.presidentMayIssue"> ou président du club</template>.</li>
             </ul>
           </section>
           <section class="card">
-            <h3>Délivrance</h3>
+            <h3>{{ teaching ? 'Examen' : 'Délivrance' }}</h3>
             <div v-for="q in enrolment.qualifications" :key="q.code" class="qual">
               <div>
                 <strong>{{ q.label }}</strong>
-                <p v-if="q.issued" class="small ok">Délivré le {{ dateFr(q.issued.date) }} par {{ q.issued.by }}</p>
+                <p v-if="q.issued" class="small ok">{{ teaching ? 'Réussi le' : 'Délivré le' }} {{ dateFr(q.issued.date) }} ({{ teaching ? 'enregistré par' : 'par' }} {{ q.issued.by }})</p>
                 <p v-else-if="q.cannotIssue" class="small muted">{{ q.cannotIssue }}</p>
-                <p v-else class="small ok">Toutes les compétences sont validées.</p>
+                <p v-else class="small ok">{{ teaching ? 'Modules validés : le stagiaire peut se présenter à l\'examen.' : 'Toutes les compétences sont validées.' }}</p>
               </div>
               <button v-if="q.issued && auth.isReferent" class="btn btn-ghost btn-sm" @click="unissue(q.code, q.label)">Annuler</button>
-              <button v-else-if="!q.issued" class="btn btn-ok btn-sm" :disabled="!!q.cannotIssue" :title="q.cannotIssue ?? ''" @click="issue(q.code, q.label)"><AppIcon name="check" :size="15" /> Délivrer</button>
+              <button v-else-if="!q.issued" class="btn btn-ok btn-sm" :disabled="!!q.cannotIssue" :title="q.cannotIssue ?? ''" @click="issue(q.code, q.label)"><AppIcon name="check" :size="15" /> {{ teaching ? 'Examen réussi' : 'Délivrer' }}</button>
             </div>
           </section>
         </div>
 
+        <InitiatorBook v-if="teaching" :enrolment="enrolment" :cur="cur" :editable="editable" @updated="t = $event" />
+        <template v-else>
         <p class="legend small">
           <span v-for="s in (['NT', 'ECA', 'A', 'V'] as SkillStatus[])" :key="s"><span class="st" :class="s">{{ STATUS_SHORT[s] }}</span> {{ STATUS_LABELS[s] }}</span>
         </p>
@@ -291,10 +307,11 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
             <li v-if="!enrolment.evaluations.length" class="muted">Aucune évaluation.</li>
           </ul>
         </section>
+        </template>
       </template>
     </template>
 
-    <p class="muted small foot">Référentiel : intitulés du Manuel de Formation Technique FFESSM. Contenus détaillés et modalités d'évaluation : se référer au manuel officiel.</p>
+    <p class="muted small foot">Référentiel : intitulés du Manuel de Formation Technique et du livret pédagogique Initiateur FFESSM. Contenus détaillés et modalités d'évaluation : se référer au manuel officiel.</p>
 
     <!-- Évaluer -->
     <AppDialog v-model="evalOpen" :title="evalComp?.title ?? 'Évaluer'">
@@ -382,6 +399,8 @@ const statuses: Exclude<SkillStatus, 'NT'>[] = ['ECA', 'A', 'V']
 .two { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: .75rem; margin-bottom: .75rem }
 .two h3, .history h3 { margin: 0 0 .5rem; font-size: 1rem }
 .check { display: flex; align-items: center; gap: .5rem; padding: .2rem 0 }
+.stage { display: grid; grid-template-columns: 1fr 1fr auto; gap: .5rem; align-items: end; margin-bottom: .5rem }
+@media (max-width: 500px) { .stage { grid-template-columns: 1fr } }
 .notes { margin: .5rem 0 0; padding-left: 1.1rem; color: var(--muted); font-size: .85rem }
 .qual { display: flex; justify-content: space-between; align-items: center; gap: .75rem; padding: .45rem 0; border-top: 1px solid var(--line) }
 .qual:first-of-type { border-top: 0 }

@@ -32,8 +32,18 @@ class Enrolment
     /** Qualifications délivrées : code => {date, by}. */
     #[ORM\Column(type: 'json')]
     private array $issued = [];
+    /** Initiateur : modules validés / dispensés et exigences pratiques — {m1: {validated: {date, by}, exempted: {date, by}, requirements: {clé: {date, by}}}}. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $modules = null;
+    /** Initiateur : dossier — {stageInitial: {date, ctr}, exam: {date, place}}. */
+    #[ORM\Column(type: 'json', nullable: true)]
+    private ?array $dossier = null;
     #[ORM\Column]
     private \DateTimeImmutable $createdAt;
+    /** @var Collection<int, TeachingSession> */
+    #[ORM\OneToMany(targetEntity: TeachingSession::class, mappedBy: 'enrolment', cascade: ['remove'])]
+    #[ORM\OrderBy(['date' => 'ASC', 'id' => 'ASC'])]
+    private Collection $sessions;
     /** @var Collection<int, Evaluation> */
     #[ORM\OneToMany(targetEntity: Evaluation::class, mappedBy: 'enrolment', cascade: ['remove'])]
     #[ORM\OrderBy(['date' => 'ASC', 'id' => 'ASC'])]
@@ -47,6 +57,7 @@ class Enrolment
         $this->startedAt = $startedAt;
         $this->createdAt = new \DateTimeImmutable();
         $this->evaluations = new ArrayCollection();
+        $this->sessions = new ArrayCollection();
     }
 
     public function getId(): ?int { return $this->id; }
@@ -63,4 +74,10 @@ class Enrolment
     public function setIssued(array $i): static { $this->issued = $i; return $this; }
     /** @return Collection<int, Evaluation> */
     public function getEvaluations(): Collection { return $this->evaluations; }
+    /** @return Collection<int, TeachingSession> */
+    public function getSessions(): Collection { return $this->sessions; }
+    public function getModules(): array { return $this->modules ?? []; }
+    public function setModules(array $m): static { $this->modules = $m; return $this; }
+    public function getDossier(): array { return $this->dossier ?? []; }
+    public function setDossier(array $d): static { $this->dossier = $d; return $this; }
 }
